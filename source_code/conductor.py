@@ -1029,12 +1029,12 @@ class Conductor:
         """
 
         # Set the initial value of the conductor time step for 
-        # thermal-hydraulic solution to the user defined minimum time step 
-        # (STPMIN). In case of adaptive time step, function get_time_step is 
-        # called in method simulation.conductor_solution after call to function 
-        # step to update the value of the next time at which the 
-        # thermal-hydraulic solution should be computed.
-        self.time_step = simulation.transient_input["STPMIN"]
+        # thermal-hydraulic solution to the user defined time step. In case of 
+        # adaptive time step, function get_time_step is called in method 
+        # simulation.conductor_solution after call to function step to update 
+        # the value of the next time at which the thermal-hydraulic solution 
+        # should be computed.
+        self.time_step = simulation.transient_input["TIME_STEP"]
         
         self.dict_topology = dict()  # dictionary declaration (cdp, 09/2020)
         self.dict_interf_peri = dict()  # dictionary declaration (cdp, 07/2020)
