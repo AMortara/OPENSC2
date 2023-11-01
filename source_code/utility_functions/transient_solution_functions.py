@@ -67,6 +67,8 @@ def get_time_step(
     iadaptime = transient_input["IADAPTIME"]
     t_step_min = transient_input["STPMIN"]
     t_end = transient_input["TEND"]
+    # Previous time step
+    prv_time_step = conductor.time_step
     
     # Check if user specified a valid value to flag IADAPTIME.
     check_flag_value(
@@ -115,10 +117,10 @@ def get_time_step(
             opt_tstep = min(t_step_comp[idx_first_temp:])
 
         # Tune the time step smoothly
-        if time_step < 0.5 * opt_tstep:
-            time_step = time_step * transient_input["MLT_UPPER"]
-        elif time_step > 1.0 * opt_tstep:
-            time_step = time_step * transient_input["MLT_UPPER"]
+        if prv_time_step < 0.5 * opt_tstep:
+            time_step = prv_time_step * transient_input["MLT_UPPER"]
+        elif prv_time_step > 1.0 * opt_tstep:
+            time_step = prv_time_step * transient_input["MLT_UPPER"]
         
         # Limit the time step in the window allowed by the user
         time_step = max(time_step, t_step_min)
