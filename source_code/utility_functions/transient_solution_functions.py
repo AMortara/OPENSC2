@@ -136,7 +136,7 @@ def get_time_step(
         # user_adaptive_time_step (IADAPTIME = -2)
 
         if iadaptime == -1:
-            raise ValueError("Adaptive time step from user defined inptu file (IADAPTIME = -1) should stil be implemented. Plese consider use other allowed values for flag IADAPTIME in sheet TRANSIENT of input file transitory_input.xlsx.")
+            raise ValueError(f"Adaptive time step from user defined input file (IADAPTIME = -1) should still be implemented. Plese consider using another allowed value for flag IADAPTIME in sheet TRANSIENT of input file {fpath}.")
         elif iadaptime == -2:
             return user_adaptive_time_step(
                 conductor,
