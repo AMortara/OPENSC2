@@ -108,7 +108,7 @@ class Simulation:
         # the default value).
         self.transient_input.update(
             {
-                key: val for key,val in MLT_DEFAULT_VALUE.values() 
+                key: val for key,val in MLT_DEFAULT_VALUE.items() 
                 if (
                     isinstance(self.transient_input[key],str) 
                     and self.transient_input[key].lower() == "none"
