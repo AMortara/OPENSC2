@@ -434,7 +434,7 @@ class Simulation:
                 # allows to avoid checking if num_step > 1 for each time step 
                 # and for each conductor. The initial value of the time step 
                 # for each conductor is defined at conductor instance and it is 
-                # equal to the minimum time step.
+                # equal to the user define time step.
                 conductor.time_step = get_time_step(
                     conductor,
                     self.transient_input,
