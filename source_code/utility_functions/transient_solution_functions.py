@@ -849,19 +849,19 @@ def eval_sub_array_norm(
     
     return np.sqrt(sub_array_norm)
 
-def eval_eigenvalues(
+def eval_sub_array_max(
     array:np.ndarray,
     conductor:Conductor,
     )->np.ndarray:
     """
-    Function that evaluate an approximation of the eigenvalues of the solution of as many sub arrays as the number of unknowns of the thermal hydraulic problem stored insde input argument array. Being jj the j-th unknown (i.e. CHAN_1 temperature), the sub array is given by sub_arr = array[jj::ndf] if ndf is the number of unknowns (number of degrees of freedom). The eigenvalue is the maximum value of this sub array. The final outcome is an array of eigenvalues with ndf elements.
+    Function that evaluates the maximum value of as many sub arrays as the number of unknowns of the thermal hydraulic problem stored insde input argument array. Being jj the j-th unknown (i.e. CHAN_1 temperature), the sub array is given by sub_arr = array[jj::ndf] if ndf is the number of unknowns (number of degrees of freedom). Then the maximum of this value is extracted. The final outcome is an array of maximum values with ndf elements.
 
     Args:
-        array (np.ndarray): array containing ndf sub arrays (each being an approximation of the eigenvalues of the thermal hydraulic solution).
+        array (np.ndarray): array containing ndf sub arrays (each being an approximation of the eigenvalues of the thermal hydraulic solution or the norm of the solution variation wrt the previous time step).
         conductor (Conductor): object with all the information of the conductor.
     
     Returns:
-        np.ndarray: array of eigenvalues with ndf elements.
+        np.ndarray: array of maximum values with ndf elements.
     """
 
     # Alias
