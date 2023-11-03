@@ -105,7 +105,7 @@ def get_time_step(
         if abs(iadaptime) == 1:
             # Store the optimal time step (from accuracy point of view) 
             # accounting for the whole solution variation.
-            opt_tstep = min(t_step_comp)
+            opt_tstep = t_step_comp.min()
         elif iadaptime == 2:
             # Index of the temperature unknown of the first fluid 
             # component, i.e. first index corresponding to a temperature in 
@@ -114,7 +114,7 @@ def get_time_step(
             idx_first_temp = conductor.inventory["FluidComponent"].number << 1
             # Store the optimal time step (from accuracy point of view) 
             # accounting for the temperature variation only.
-            opt_tstep = min(t_step_comp[idx_first_temp:])
+            opt_tstep = t_step_comp[idx_first_temp:].min()
 
         # Tune the time step smoothly
         if prv_time_step < 0.5 * opt_tstep:
@@ -873,22 +873,22 @@ def eval_eigenvalues(
     # COMPUTE THE EIGENVALUES
     for f_comp in conductor.inventory["FluidComponent"].collection:
         # velocity
-        sub_array[eq_idx[f_comp.identifier].velocity] = max(
-            array[eq_idx[f_comp.identifier].velocity::ndf]
+        sub_array[eq_idx[f_comp.identifier].velocity] = (
+            array[eq_idx[f_comp.identifier].velocity::ndf].max()
         )
         # pressure
-        sub_array[eq_idx[f_comp.identifier].pressure] = max(
-            array[eq_idx[f_comp.identifier].pressure::ndf]
+        sub_array[eq_idx[f_comp.identifier].pressure] = (
+            array[eq_idx[f_comp.identifier].pressure::ndf].max()
         )
         # temperature
-        sub_array[eq_idx[f_comp.identifier].temperature] = max(
-            array[eq_idx[f_comp.identifier].temperature::ndf]
+        sub_array[eq_idx[f_comp.identifier].temperature] = (
+            array[eq_idx[f_comp.identifier].temperature::ndf].max()
         )
     # Loop on SolidComponent.
     for s_comp in conductor.inventory["SolidComponent"].collection:
         # temperature
-        sub_array[eq_idx[s_comp.identifier]] = max(
-            array[eq_idx[s_comp.identifier]::ndf]
+        sub_array[eq_idx[s_comp.identifier]] = (
+            array[eq_idx[s_comp.identifier]::ndf].max()
         )
     
     return sub_array
