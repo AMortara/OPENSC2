@@ -554,6 +554,10 @@ def step(conductor, envionment, qsource, num_step):
             for obj in conductor.inventory["SolidComponent"].collection
         }
     )
+    
+    # Save an hard copy of the thermal-hydraulic problem solution at the 
+    # previous time step.
+    prv_sysvar = conductor.dict_Step["SYSVAR"][:, 0].copy()
 
     SYSMAT = gredub(conductor, SYSMAT)
     # Compute the solution at current time stepand overwrite key SYSVAR of \
@@ -568,6 +572,13 @@ def step(conductor, envionment, qsource, num_step):
     CHG = np.zeros(conductor.dict_N_equation["Total"])
     EIG = np.zeros(conductor.dict_N_equation["Total"])
 
+    # Compute the variation of the solution wrt the solution at the previous 
+    # time step.
+    sol_var = (
+        (conductor.dict_Step["SYSVAR"][:, 0] - prv_sysvar)
+        / (prv_sysvar + TINY)
+    )
+
     # Evaluate the norm of the solution.
     conductor.dict_norm["Solution"] = eval_sub_array_norm(Known,conductor)
 
@@ -581,6 +592,14 @@ def step(conductor, envionment, qsource, num_step):
     EIG = abs(CHG / conductor.time_step) / (abs(Known) + TINY)
     # Evaluate the norm of the solution change.
     conductor.dict_norm["Change"] = eval_sub_array_norm(CHG,conductor)
+    
+    # Compute the norm of the soluton variation
+    sol_var_norm = eval_sub_array_norm(sol_var,conductor)
+
+    # Evaluate the maximum value for each degree of freedom from the array with 
+    # the norm of the solution variation.
+    conductor.max_sol_var_norm = eval_sub_array_max(sol_var_norm,conductor)
+
     # Evaluate the eigenvalues of the solution.
     conductor.EQTEIG = eval_sub_array_max(EIG,conductor)
     # Reorganize thermal hydraulic solution
