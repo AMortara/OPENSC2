@@ -86,7 +86,7 @@ def get_time_step(
         
         time_step = min(
             transient_input["TIME_STEP"], t_end - conductor.cond_time[-1]
-        ) 
+        )
         return time_step
     elif iadaptime > 0:
 
