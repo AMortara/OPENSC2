@@ -582,7 +582,7 @@ def step(conductor, envionment, qsource, num_step):
     # Evaluate the norm of the solution change.
     conductor.dict_norm["Change"] = eval_sub_array_norm(CHG,conductor)
     # Evaluate the eigenvalues of the solution.
-    conductor.EQTEIG = eval_eigenvalues(EIG,conductor)
+    conductor.EQTEIG = eval_sub_array_max(EIG,conductor)
     # Reorganize thermal hydraulic solution
     reorganize_th_solution(
         conductor,
