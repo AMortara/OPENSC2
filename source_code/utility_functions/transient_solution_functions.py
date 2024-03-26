@@ -841,6 +841,14 @@ def eval_sub_array_norm(
     # Collection of NamedTuple with fluid equation index (velocity, pressure 
     # and temperaure equations) and of integer for solid equation index.
     eq_idx = conductor.equation_index
+
+    # Create a hard copy of the variable 'array' to prevent the propagation 
+    # outside the function of changes resulting from manipulation of that 
+    # variable; this would occur because the 'array' variable is a mutable 
+    # object and is passed by assignments, so in the absence of the hard copy, 
+    # the changes would be visible in all instances of the variable outside the 
+    # function.
+    array = array.copy()
     # Evaluate the square of the array.
     array **= 2.0
 
