@@ -121,6 +121,8 @@ def get_time_step(
             time_step = prv_time_step * transient_input["MLT_INCREASE"]
         elif prv_time_step > 1.0 * opt_tstep:
             time_step = prv_time_step * transient_input["MLT_DECREASE"]
+        else:
+            time_step = prv_time_step
         
         # Limit the time step in the window allowed by the user
         time_step = max(time_step, t_step_min)
