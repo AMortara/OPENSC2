@@ -890,3 +890,18 @@ class SolidComponent:
                 self.operations["IOP_MODE"] = 1
             elif self.operations["IOP_MODE"] == False:
                 self.operations["IOP_MODE"] = 0
+
+    def __initialize_store_sd(self,N_nod,N_elem):
+        """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
+        t_save_left (last time step before t_save), at t_save_right (first 
+        time step after t_save) and at t_save (user defined time at which 
+        save spatial distribution).
+
+        Args:
+            N_nod (int): (initial) number of nodes of the mesh
+            N_elem (int): (initial) number of elements of the mesh
+
+        Raises:
+            NotImplementedError: the method is not implemented in the base class
+        """
+        raise NotImplementedError("Method __initialize_store_sd is not implemented in the base class.")
