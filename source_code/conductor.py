@@ -277,6 +277,33 @@ class Conductor:
 
         # Dictionary declaration (cdp, 09/2020)
         self.inventory = dict()
+
+        # Collection of the relevant properties to be saved as spatial 
+        # distribution (nodal points) at user defined time steps.
+        self.relevant_prop_node = dict(
+            FluidComponent = (
+                "velocity",
+                "pressure",
+                "temperature",
+                "total_density",
+                "friction_factor",
+            ),
+            JacketComponent = ("temperature"),
+            StrandStabilizerComponent = ("temperature"),
+            # Update after instance of StrandMixedComponent
+            StrandMixedComponent = dict(),
+            # Update after instance of StackComponent
+            StackComponent = dict(),
+        )
+
+        # Collection of the relevant properties to be saved as spatial 
+        # distribution (Gauss points) at user defined time steps.
+        self.relevant_prop_gauss = (
+            "current_along",
+            "delta_voltage_along",
+            "linear_power_el_resistance",
+        )
+
         # call method Conductor_components_instance to make instance of conductor components (cdp, 11/2020)
         # conductorlogger.debug(
         #     f"Before call method {self.conductor_components_instance.__name__}"
@@ -865,6 +892,17 @@ class Conductor:
             self.inventory["FluidComponent"].number
             + self.inventory["SolidComponent"].number
         )
+
+        keys = ("StrandMixedComponent","StackComponent")
+        for key in keys:
+            # Loop to finalize the initialization of attribute 
+            # relevant_prop_node. This is done to allow the user to choose 
+            # whether or not to compute (and store) the current sharing 
+            # temperature at each thermal hydraulic time step.
+            for obj in self.inventory[key].collection:
+                obj_id = obj.identifier
+                self.relevant_prop_node[key][obj_id] = obj.prop_save_sd_node
+                del obj.prop_save_sd_node
 
     # end method Conductor_components_instance (cdp, 11/2020)
 
