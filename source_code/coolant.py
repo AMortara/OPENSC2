@@ -10,7 +10,14 @@ class Coolant(FluidComponentInput):
 
     KIND = "Coolant"
 
-    def __init__(self, sheet, sheetOpar, dict_file_path, identifier):
+    def __init__(
+        self,
+        sheet,
+        sheetOpar,
+        dict_file_path,
+        identifier,
+        N_nod,
+    ):
         super().__init__(sheet, sheetOpar, dict_file_path, identifier)
         # Kind of the coolant; make it lowercase to be userd as alias in PropsSI.
         self.type = self.inputs["FLUID_TYPE"].lower()
@@ -42,6 +49,30 @@ class Coolant(FluidComponentInput):
         ]
         # Empty dictionary of list to save variable time evolutions at inlet and outlet spatial coordinates.
         self.time_evol_io = {key: list() for key in headers_inl_out}
+
+        # List of properties to be saved as spatial distribution at user 
+        # defined time steps.
+        prop_save_sd = (
+        "zcoord",
+        "velocity",
+        "pressure",
+        "temperature",
+        "total_density",
+        "friction_factor",
+        )
+        # Data structure that stores spatial distribution at t_save_left (last 
+        # time step before t_save), at t_save_right (first time step after 
+        # t_save) and at t_save (user defined time at which save spatial 
+        # distribution). Values at t_save are in general computed from linear 
+        # interpolation of the data at t_save_left and at t_save_right.
+        self.store_sd_node = {
+            prop: dict(
+                t_save_left = np.zeros(N_nod),
+                t_save_right = np.zeros(N_nod),
+                t_save = np.zeros(N_nod),
+            ) for prop in prop_save_sd
+        }
+
         # Remove key FLUID_TYPE from self.inputs (it becomes attribute of object coolant); removes also for object channel.
         del self.inputs["FLUID_TYPE"]
 
