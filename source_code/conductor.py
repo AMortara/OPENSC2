@@ -733,7 +733,13 @@ class Conductor:
                     # objects;
                     # ["all_component"].collection list of all objects
                     self.inventory["FluidComponent"].collection.append(
-                        FluidComponent(sheet, sheetOpar, ii, dict_file_path)
+                        FluidComponent(
+                            sheet,
+                            sheetOpar,
+                            ii,
+                            dict_file_path,
+                            self.grid_features["N_nod"],
+                        )
                     )
                     self.inventory["all_component"].collection.append(
                         self.inventory["FluidComponent"].collection[ii - 1]

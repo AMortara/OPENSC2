@@ -73,7 +73,7 @@ class FluidComponent:
     # class variable shared by all instances
     KIND = "Fluid_component"
 
-    def __init__(self, sheet, sheetOpar, icomp, dict_file_path):
+    def __init__(self, sheet, sheetOpar, icomp, dict_file_path, N_nod):
         """[summary]
 
         Args:
@@ -87,7 +87,7 @@ class FluidComponent:
         # Instance of class Channel (build a coolant object)
         self.channel = Channel(sheet, sheetOpar, dict_file_path, self.identifier)
         # Instance of class Coolant (build a coolant object)
-        self.coolant = Coolant(sheet, sheetOpar, dict_file_path, self.identifier)
+        self.coolant = Coolant(sheet, sheetOpar, dict_file_path, self.identifier, N_nod)
         self.coordinate = dict()
         # This is a switch to apply BC for the thermal hydraulic problem 
         # according to the absolute value of flat INTIAL.
