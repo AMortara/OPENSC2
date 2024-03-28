@@ -5678,3 +5678,41 @@ class Conductor:
         )
 
         # End method load_user_defined_quantity.
+
+    def store_spatial_distributions(self, t_save_key:str):
+        """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss.
+        With this stored information at t_save_left and t_save_right the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
+
+        Args:
+            t_save_key (str): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save_right, t_save.
+        """
+
+        self.store_sd_node["zcoord"][t_save_key] = self.grid_features["zcoord"]
+        self.store_sd_gauss["zcoord_gauss"][t_save_key] = self.grid_features[
+            "zcoord_gauss"
+        ]
+        
+        # Loop on FluidComponent to store spatial distribution of selected 
+        # variables in nodal points.
+        for obj in self.inventory["FluidComponent"].collection:
+            for key in obj.store_sd_node.keys():
+                if key != "friction_factor":
+                    obj.store_sd_node[key][t_save_key] = (
+                        obj.coolant.dict_node_pt[key]
+                    )
+                else:
+                    obj.store_sd_node[key][t_save_key] = (
+                        obj.channel.dict_node_pt[key]
+                    )
+
+        # Loop on SolidComponent to store spatial distribution of selected 
+        # variables in nodal points.
+        for obj in self.inventory["SolidComponent"].collection:
+            for key in obj.store_sd_node.keys():
+                obj.store_sd_node[key][t_save_key] = obj.dict_node_pt[key]
+
+        # Loop on SolidComponent to store spatial distribution of selected 
+        # variables in Gauss points.
+        for obj in self.inventory["SolidComponent"].collection:
+            for key in obj.store_sd_gauss.keys():
+                obj.store_sd_gauss[key][t_save_key] = obj.dict_Gauss_pt[key]
