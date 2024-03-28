@@ -227,6 +227,13 @@ class StackComponent(StrandComponent):
             * self.inputs["Tape_number"]
         )
 
+        # Call method __initialize_store_sd to initialize data structure that 
+        # stores spatial distribution in both nodal and Gauss points.
+        self.__initialize_store_sd(
+            conductor.grid_feature["N_nod"],
+            conductor.grid_input["NELEMS"]
+            )
+
     def __repr__(self):
         return f"{self.__class__.__name__}(Type: {self.name}, identifier: {self.identifier})"
 
