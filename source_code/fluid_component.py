@@ -87,7 +87,7 @@ class FluidComponent:
         # Instance of class Channel (build a coolant object)
         self.channel = Channel(sheet, sheetOpar, dict_file_path, self.identifier)
         # Instance of class Coolant (build a coolant object)
-        self.coolant = Coolant(sheet, sheetOpar, dict_file_path, self.identifier, N_nod)
+        self.coolant = Coolant(sheet, sheetOpar, dict_file_path, self.identifier)
         self.coordinate = dict()
         # This is a switch to apply BC for the thermal hydraulic problem 
         # according to the absolute value of flat INTIAL.
@@ -95,6 +95,29 @@ class FluidComponent:
             1:self.impose_pressure_drop,  # abs(INTIAL) = 1
             2:self.impose_inl_p_out_v,  # abs(INTIAL) = 2
             3:self.impose_inl_v_out_p,  # abs(INTIAL) = 2
+        }
+
+        # List of properties to be saved as spatial distribution at user 
+        # defined time steps.
+        prop_save_sd = (
+        "velocity",
+        "pressure",
+        "temperature",
+        "total_density",
+        "friction_factor",
+        )
+        
+        # Data structure that stores spatial distribution at t_save_left (last 
+        # time step before t_save), at t_save_right (first time step after 
+        # t_save) and at t_save (user defined time at which save spatial 
+        # distribution). Values at t_save are in general computed from linear 
+        # interpolation of the data at t_save_left and at t_save_right.
+        self.store_sd_node = {
+            prop: dict(
+                t_save_left = np.zeros(N_nod),
+                t_save_right = np.zeros(N_nod),
+                t_save = np.zeros(N_nod),
+            ) for prop in prop_save_sd
         }
 
     # End method __init__.
