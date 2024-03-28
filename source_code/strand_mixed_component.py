@@ -951,7 +951,12 @@ class StrandMixedComponent(StrandComponent):
 
         return self.dict_Gauss_pt["electric_resistance"]
 
-    def __initialize_store_sd(self,N_nod:int,N_elem:int):
+    def __initialize_store_sd(
+        self,
+        N_nod:int,
+        N_elem:int,
+        prop_save_sd_gauss:Union[list,set,tuple],
+        )->tuple:
         """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
         t_save_left (last time step before t_save), at t_save_right (first 
         time step after t_save) and at t_save (user defined time at which 
@@ -960,13 +965,19 @@ class StrandMixedComponent(StrandComponent):
         Args:
             N_nod (int): (initial) number of nodes of the mesh
             N_elem (int): (initial) number of elements of the mesh
+            prop_save_sd_gauss (Union[list,set,tuple]): collection of the properties of interest that should be saved as spatial distribution in Gauss points at user defined time steps.
+
+        Returns:
+            tuple: collection of the following items:
+                * prop_save_sd_node -> collection of properties to be stored for spatial distribution in nodal points;
+                * store_sd_node -> initialized data structure for spatial distribution in nodalpoints;
+                * store_sd_gauss -> initialized data structure for spatial distribution in Gauss points.
         """
         # Check if current sharing temperature will be evaluated at each 
         # thermal hydraulic simulation time step.
         if self.operations["TCS_EVALUATION"]:
             # The current sharing temperature will be evaluated and stored.
             prop_save_sd_node = (
-                "zcoord",
                 "temperature",
                 "T_cur_sharing",
                 "J_critical",
@@ -974,42 +985,44 @@ class StrandMixedComponent(StrandComponent):
         else:
             # The current sharing temperature will not be evaluated and stored.
             prop_save_sd_node = (
-                "zcoord",
                 "temperature",
                 "J_critical",
             )
         
         # Data structure that stores spatial distribution (nodal points) at 
-        # t_save_left (last time step before t_save), at t_save_right (first 
-        # time step after t_save) and at t_save (user defined time at which 
-        # save spatial distribution). Values at t_save are in general computed 
-        # from linear interpolation of the data at t_save_left and at 
-        # t_save_right.
-        self.store_sd_node = {
+        # t_save_left (last time step before t_save) and at t_save (user 
+        # defined time at which save spatial distribution). Values at t_save 
+        # are in general computed from linear interpolation of the data at 
+        # t_save_left and at t_save_right.
+        # Since the interpolation is carried out when time = t_save_right, 
+        # there is no need to store info at this time here and then perform the 
+        # interpolation: the interpolation is carried out directily exploiting 
+        # the available data.
+        store_sd_node = {
             prop: dict(
                 t_save_left = np.zeros(N_nod),
-                t_save_right = np.zeros(N_nod),
                 t_save = np.zeros(N_nod),
             ) for prop in prop_save_sd_node
         }
 
-        prop_save_sd_gauss = (
-            "zcoord_gauss",
-            "current_along",
-            "delta_voltage_along",
-            "linear_power_el_resistance",
-        )
-
         # Data structure that stores spatial distribution (Gauss points) at 
-        # t_save_left (last time step before t_save), at t_save_right (first 
-        # time step after t_save) and at t_save (user defined time at which 
-        # save spatial distribution). Values at t_save are in general computed 
-        # from linear interpolation of the data at t_save_left and at 
-        # t_save_right.
-        self.store_sd_gauss = {
+        # t_save_left (last time step before t_save) and at t_save (user 
+        # defined time at which save spatial distribution). Values at t_save 
+        # are in general computed from linear interpolation of the data at 
+        # t_save_left and at t_save_right.
+        # Since the interpolation is carried out when time = t_save_right, 
+        # there is no need to store info at this time here and then perform the 
+        # interpolation: the interpolation is carried out directily exploiting 
+        # the available data.
+        store_sd_gauss = {
             prop: dict(
                 t_save_left = np.zeros(N_elem),
-                t_save_right = np.zeros(N_elem),
                 t_save = np.zeros(N_elem),
             ) for prop in prop_save_sd_gauss
         }
+
+        return (
+            prop_save_sd_node,
+            store_sd_node,
+            store_sd_gauss,
+        )
