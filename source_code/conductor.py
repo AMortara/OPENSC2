@@ -5717,12 +5717,12 @@ class Conductor:
 
         # End method load_user_defined_quantity.
 
-    def store_spatial_distributions(self, t_save_key:str):
+    def store_spatial_distributions(self, t_save_key:str="t_save_left"):
         """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss.
-        With this stored information at t_save_left and t_save_right the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
+        With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
 
         Args:
-            t_save_key (str): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save_right, t_save.
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save_left".
         """
 
         self.store_sd_node["zcoord"][t_save_key] = self.grid_features["zcoord"]
