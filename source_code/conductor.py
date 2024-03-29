@@ -5769,3 +5769,58 @@ class Conductor:
         for obj in self.inventory["SolidComponent"].collection:
             for key in obj.store_sd_gauss.keys():
                 obj.store_sd_gauss[key][t_save_key] = obj.dict_Gauss_pt[key]
+
+    def store_interp_spatial_distributions(self):
+        """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss at time t_save.
+        The values are computed by means of linear interpolation calling function interp_at_t_save.
+        """
+
+        # Alias
+        tt = self.Space_save[self.i_save]
+        t1 = self.t_save_left
+        t2 = self.t_save_right
+        
+        # Loop on FluidComponent to interpolate and store spatial distribution 
+        # of selected variables in nodal points.
+        for obj in self.inventory["FluidComponent"].collection:
+            for key in obj.store_sd_node.keys():
+                if key != "friction_factor":
+                    obj.store_sd_node[key]["t_save"] = interp_at_t_save(
+                        tt,
+                        t1,
+                        t2,
+                        obj.store_sd_node[key]["t_save_left"],
+                        obj.coolant.dict_node_pt[key],
+                    )
+                else:
+                    obj.store_sd_node[key]["t_save"] = interp_at_t_save(
+                        tt,
+                        t1,
+                        t2,
+                        obj.store_sd_node[key]["t_save_left"],
+                        obj.coolant.dict_node_pt[key],
+                    )
+
+        # Loop on SolidComponent to interpolate and store spatial distribution 
+        # of selected variables in nodal points.
+        for obj in self.inventory["SolidComponent"].collection:
+            for key in obj.store_sd_node.keys():
+                obj.store_sd_node[key]["t_save"] = interp_at_t_save(
+                        tt,
+                        t1,
+                        t2,
+                        obj.store_sd_node[key]["t_save_left"],
+                        obj.dict_node_pt[key],
+                    )
+
+        # Loop on SolidComponent to interpolate and store spatial distribution 
+        # of selected variables in Gauss points.
+        for obj in self.inventory["SolidComponent"].collection:
+            for key in obj.store_sd_gauss.keys():
+                obj.store_sd_gauss[key]["t_save"] = interp_at_t_save(
+                        tt,
+                        t1,
+                        t2,
+                        obj.store_sd_gauss[key]["t_save_left"],
+                        obj.dict_Gauss_pt[key],
+                    )
