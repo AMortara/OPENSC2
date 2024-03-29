@@ -148,13 +148,6 @@ class StrandStabilizerComponent(StrandComponent):
         # potential values.
         self.deal_with_fixed_potential(conductor.inputs["ZLENGTH"])
 
-        # Call method __initialize_store_sd to initialize data structure that 
-        # stores spatial distribution in both nodal and Gauss points.
-        self.__initialize_store_sd(
-            conductor.grid_feature["N_nod"],
-            conductor.grid_input["NELEMS"]
-            )
-
     def __repr__(self):
         return f"{self.__class__.__name__}(Type: {self.name}, identifier: {self.identifier})"
 
@@ -239,13 +232,13 @@ class StrandStabilizerComponent(StrandComponent):
             / self.inputs["CROSSECTION"])
         return self.dict_Gauss_pt["electric_resistance"]
 
-    def __initialize_store_sd(
+    def initialize_store_sd(
         self,
         N_nod:int,
         N_elem:int,
         prop_save_sd_gauss:Union[list,set,tuple],
         )->tuple:
-        """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
+        """Method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
         t_save_left (last time step before t_save), at t_save_right (first 
         time step after t_save) and at t_save (user defined time at which 
         save spatial distribution).

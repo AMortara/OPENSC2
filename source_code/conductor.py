@@ -766,7 +766,6 @@ class Conductor:
                             sheetOpar,
                             ii,
                             dict_file_path,
-                            self.grid_features["N_nod"],
                         )
                     )
                     self.inventory["all_component"].collection.append(
@@ -893,17 +892,6 @@ class Conductor:
             self.inventory["FluidComponent"].number
             + self.inventory["SolidComponent"].number
         )
-
-        keys = ("StrandMixedComponent","StackComponent")
-        for key in keys:
-            # Loop to finalize the initialization of attribute 
-            # relevant_prop_node. This is done to allow the user to choose 
-            # whether or not to compute (and store) the current sharing 
-            # temperature at each thermal hydraulic time step.
-            for obj in self.inventory[key].collection:
-                obj_id = obj.identifier
-                self.relevant_prop_node[key][obj_id] = obj.prop_save_sd_node
-                del obj.prop_save_sd_node
 
     # end method Conductor_components_instance (cdp, 11/2020)
 
@@ -1196,17 +1184,7 @@ class Conductor:
         self.num_step_save = np.zeros(self.Space_save.shape, dtype=int)
         self.i_save_max = self.num_step_save - 1
 
-        # No need to have also t_save_right since all info at this time step 
-        # are already available as the solution of the problem, so the linear 
-        # interpolation is performed directly with this info.
-        self.store_sd_node["zcoord"] = dict(
-            t_save_left = np.zeros(self.grid_features["N_nod"]),
-            t_save = np.zeros(self.grid_features["N_nod"]),
-        )
-        self.store_sd_gauss["zcoord_gauss"] = dict(
-            t_save_left = np.zeros(self.grid_input["NELEMS"]),
-            t_save = np.zeros(self.grid_input["NELEMS"]),
-        )
+        self.__initialize_store_sd()
 
         # Load the content of column self.identifier of sheet Time in file conductors_disgnostic.xlsx as a series and convert to numpy array of float.
         self.Time_save = (
@@ -5824,3 +5802,70 @@ class Conductor:
                         obj.store_sd_gauss[key]["t_save_left"],
                         obj.dict_Gauss_pt[key],
                     )
+
+    def __initialize_store_sd(self):
+        """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
+        t_save_left (last time step before t_save) and at t_save (user defined time at which save spatial distribution).
+        Attributes store_sd_node and store_sd_gauss are available not only for the class Conductor, but also for the classes FluidComponent, JacketComponent, StackComponent, StrandMixedComponent and StrandStabilizerComponent and are initialized calling method initialize_store_sd of these classes. Class FluidComponent does not have attribute store_sd_gauss.
+        In this method is also finalized the initialization of attribute relevant_prop_node of class Conductor.
+        """
+
+        # Alias
+        N_nod = self.grid_features["N_nod"]
+        N_elem = self.grid_input["NELEMS"]
+        prop_gauss = self.relevant_prop_gauss
+
+        # No need to have also t_save_right since all info at this time step 
+        # are already available as the solution of the problem, so the linear 
+        # interpolation is performed directly with this info.
+        self.store_sd_node["zcoord"] = dict(
+            t_save_left = np.zeros(N_nod),
+            t_save = np.zeros(N_nod),
+        )
+        self.store_sd_gauss["zcoord_gauss"] = dict(
+            t_save_left = np.zeros(N_elem),
+            t_save = np.zeros(N_elem),
+        )
+
+        # Data structure that stores spatial distribution at t_save_left (last 
+        # time step before t_save), at t_save_right (first time step after 
+        # t_save) and at t_save (user defined time at which save spatial 
+        # distribution). Values at t_save are in general computed from linear 
+        # interpolation of the data at t_save_left and at t_save_right.
+        for obj in self.inventory["FluidComponent"].collection:
+            obj.store_sd_node = obj.initialize_store_sd(N_nod)
+
+        class_name = ("StackComponent","StrandMixedComponent")
+        for name in class_name:
+            # Data structure that stores spatial distribution at t_save_left 
+            # (last time step before t_save), at t_save_right (first time step 
+            # after t_save) and at t_save (user defined time at which save 
+            # spatial distribution). Values at t_save are in general computed 
+            # from linear interpolation of the data at t_save_left and at 
+            # t_save_right.
+            for obj in self.inventory[name].collection:
+                obj_id = obj.identifier
+                (
+                    # Finalize the initialization of attribute 
+                    # relevant_prop_node. This is done to allow the user to 
+                    # choose whether or not to compute (and store) the current 
+                    # sharing temperature at each thermal hydraulic time step.
+                    self.relevant_prop_node[name][obj_id],
+                    obj.store_sd_node,
+                    obj.store_sd_gauss,
+                ) = obj.initialize_store_sd(N_nod,N_elem,prop_gauss)
+
+        class_name = ("JacketComponent","StrandStabilizerComponent")
+        for name in class_name:
+            # Data structure that stores spatial distribution at t_save_left 
+            # (last time step before t_save), at t_save_right (first time step 
+            # after t_save) and at t_save (user defined time at which save 
+            # spatial distribution). Values at t_save are in general computed 
+            # from linear interpolation of the data at t_save_left and at 
+            # t_save_right.
+            for obj in self.inventory[name].collection:
+                (
+                    _,
+                    obj.store_sd_node,
+                    obj.store_sd_gauss
+                ) = obj.initialize_store_sd(N_nod,N_elem,prop_gauss)
