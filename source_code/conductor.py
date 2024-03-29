@@ -5792,6 +5792,100 @@ class Conductor:
         tt = self.Space_save[self.i_save]
         t1 = self.t_save_left
         t2 = self.t_save_right
+
+        self.store_sd_node["zcoord"]["t_save"] = interp_at_t_save(
+            tt,
+            t1,
+            t2,
+            self.store_sd_node["zcoord"]["t_save_left"],
+            self.grid_features["zcoord"],
+        )
+
+        for kk,vv in self.dict_node_pt["HTC"]["ch_ch"]["Open"].items():
+            self.store_sd_node["htc_ch_ch_open"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_ch_ch_open"]["t_save_left"][kk],
+                    vv,
+                )
+            )
+        
+        for kk,vv in self.dict_node_pt["HTC"]["ch_ch"]["Close"].items():
+            self.store_sd_node["htc_ch_ch_close"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_ch_ch_close"]["t_save_left"][kk],
+                    vv,
+                )
+            )
+        
+        for kk,vv in self.dict_node_pt["HTC"]["ch_sol"].items():
+            self.store_sd_node["htc_ch_sol"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_ch_sol"]["t_save_left"][kk],
+                    vv,
+                )
+            )
+        
+        for kk,vv in self.dict_node_pt["HTC"]["sol_sol"]["cond"].items():
+            self.store_sd_node["htc_sol_sol_cond"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_sol_sol_cond"]["t_save_left"][kk],
+                    vv,
+                )
+            )
+        
+        for kk,vv in self.dict_node_pt["HTC"]["sol_sol"]["rad"].items():
+            self.store_sd_node["htc_sol_sol_rad"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_sol_sol_rad"]["t_save_left"][kk],
+                    vv,
+                )
+            )
+
+        self.store_sd_gauss["zcoord_gauss"]["t_save"] = interp_at_t_save(
+            tt,
+            t1,
+            t2,
+            self.store_sd_gauss["zcoord_gauss"]["t_save_left"],
+            self.grid_features["zcoord_gauss"],
+        )
+        
+        for kk,vv in self.heat_rad_jk.items():
+            self.store_sd_gauss["heat_rad_jk"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_gauss["heat_rad_jk"]["t_save_left"][kk],
+                    vv,
+                )
+            )
+
+        for kk,vv in self.heat_exchange_jk_env.items():
+            self.store_sd_gauss["heat_exchange_jk_env"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_gauss["heat_exchange_jk_env"][
+                        "t_save_left"][kk],
+                    vv,
+                )
+            )
         
         # Loop on FluidComponent to interpolate and store spatial distribution 
         # of selected variables in nodal points.
