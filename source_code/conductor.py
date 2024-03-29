@@ -289,8 +289,8 @@ class Conductor:
                 "total_density",
                 "friction_factor",
             ),
-            JacketComponent = ("temperature"),
-            StrandStabilizerComponent = ("temperature"),
+            JacketComponent = ("temperature",),# this is a tuple
+            StrandStabilizerComponent = ("temperature",), # this is a tuple
             # Update after instance of StrandMixedComponent
             StrandMixedComponent = dict(),
             # Update after instance of StackComponent
