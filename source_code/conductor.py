@@ -5815,6 +5815,9 @@ class Conductor:
         N_elem = self.grid_input["NELEMS"]
         prop_gauss = self.relevant_prop_gauss
 
+        self.store_sd_node = dict()
+        self.store_sd_gauss = dict()
+
         # No need to have also t_save_right since all info at this time step 
         # are already available as the solution of the problem, so the linear 
         # interpolation is performed directly with this info.
