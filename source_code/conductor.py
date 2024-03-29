@@ -5734,10 +5734,30 @@ class Conductor:
         """
 
         self.store_sd_node["zcoord"][t_save_key] = self.grid_features["zcoord"]
-        self.store_sd_gauss["zcoord_gauss"][t_save_key] = self.grid_features[
-            "zcoord_gauss"
-        ]
-        
+        self.store_sd_node["htc_ch_ch_open"][t_save_key] = (
+            self.dict_node_pt["HTC"]["ch_ch"]["Open"]
+        )
+        self.store_sd_node["htc_ch_ch_close"][t_save_key] = (
+            self.dict_node_pt["HTC"]["ch_ch"]["Close"]
+        )
+        self.store_sd_node["htc_ch_sol"][t_save_key] = (
+            self.dict_node_pt["HTC"]["ch_sol"]
+        )
+        self.store_sd_node["htc_sol_sol_cond"][t_save_key] = (
+            self.dict_node_pt["HTC"]["sol_sol"]["cond"]
+        )
+        self.store_sd_node["htc_sol_sol_rad"][t_save_key] = (
+            self.dict_node_pt["HTC"]["sol_sol"]["rad"]
+        )
+
+        self.store_sd_gauss["zcoord_gauss"][t_save_key] = (
+            self.grid_features["zcoord_gauss"]
+        )
+        self.store_sd_gauss["heat_rad_jk"][t_save_key] = self.heat_rad_jk
+        self.store_sd_gauss["heat_exchange_jk_env"][t_save_key] = (
+            self.heat_exchange_jk_env
+        )
+
         # Loop on FluidComponent to store spatial distribution of selected 
         # variables in nodal points.
         for obj in self.inventory["FluidComponent"].collection:
