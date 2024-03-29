@@ -1182,7 +1182,7 @@ class Conductor:
         self.i_save = 0
         # list of number of time steps at wich save the spatial discretization
         self.num_step_save = np.zeros(self.Space_save.shape, dtype=int)
-        self.i_save_max = self.num_step_save - 1
+        self.i_save_max = len(self.Space_save) - 1
 
         self.__initialize_store_sd()
 
