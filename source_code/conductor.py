@@ -295,14 +295,29 @@ class Conductor:
             StrandMixedComponent = dict(),
             # Update after instance of StackComponent
             StackComponent = dict(),
+            Conductor = (
+                "zcoord",
+                "htc_ch_ch_open",
+                "htc_ch_ch_close",
+                "htc_ch_sol",
+                "htc_sol_sol_cond",
+                "htc_sol_sol_rad",
+            ),
         )
 
         # Collection of the relevant properties to be saved as spatial 
         # distribution (Gauss points) at user defined time steps.
-        self.relevant_prop_gauss = (
-            "current_along",
-            "delta_voltage_along",
-            "linear_power_el_resistance",
+        self.relevant_prop_gauss = dict(
+            SolidComponent = (
+                "current_along",
+                "delta_voltage_along",
+                "linear_power_el_resistance",
+            ),
+            Conductor = (
+                "zcoord_gauss",
+                "heat_rad_jk",
+                "heat_exchange_jk_env",
+            ),
         )
 
         # call method Conductor_components_instance to make instance of conductor components (cdp, 11/2020)
