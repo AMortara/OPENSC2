@@ -42,6 +42,7 @@ from utility_functions.auxiliary_functions import (
     check_headers,
     check_object_number,
     set_diagnostic,
+    interp_at_t_save,
 )
 from utility_functions.electric_auxiliary_functions import (
     custom_current_function,
@@ -1193,6 +1194,20 @@ class Conductor:
         self.i_save = 0
         # list of number of time steps at wich save the spatial discretization
         self.num_step_save = np.zeros(self.Space_save.shape, dtype=int)
+        self.i_save_max = self.num_step_save - 1
+
+        # No need to have also t_save_right since all info at this time step 
+        # are already available as the solution of the problem, so the linear 
+        # interpolation is performed directly with this info.
+        self.store_sd_node["zcoord"] = dict(
+            t_save_left = np.zeros(self.grid_features["N_nod"]),
+            t_save = np.zeros(self.grid_features["N_nod"]),
+        )
+        self.store_sd_gauss["zcoord_gauss"] = dict(
+            t_save_left = np.zeros(self.grid_input["NELEMS"]),
+            t_save = np.zeros(self.grid_input["NELEMS"]),
+        )
+
         # Load the content of column self.identifier of sheet Time in file conductors_disgnostic.xlsx as a series and convert to numpy array of float.
         self.Time_save = (
             pd.read_excel(
