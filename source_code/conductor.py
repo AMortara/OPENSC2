@@ -5828,7 +5828,7 @@ class Conductor:
         # Alias
         N_nod = self.grid_features["N_nod"]
         N_elem = self.grid_input["NELEMS"]
-        prop_gauss = self.relevant_prop_gauss
+        prop_gauss = self.relevant_prop_gauss["SolidComponent"]
 
         self.store_sd_node = dict()
         self.store_sd_gauss = dict()
@@ -5840,10 +5840,23 @@ class Conductor:
             t_save_left = np.zeros(N_nod),
             t_save = np.zeros(N_nod),
         )
+        # Start from the second element (index 1) because "zcoord" is 
+        # initialized before
+        for prop in self.relevant_prop_node["Conductor"][1:]:
+            self.store_sd_node[prop] = dict(
+                t_save_left = dict(),
+                t_save = dict(),
+            )
+        
         self.store_sd_gauss["zcoord_gauss"] = dict(
             t_save_left = np.zeros(N_elem),
             t_save = np.zeros(N_elem),
         )
+        for prop in self.relevant_prop_gauss["Conductor"][1:]:
+            self.store_sd_gauss[prop] = dict(
+                t_save_left = dict(),
+                t_save = dict(),
+            )
 
         # Data structure that stores spatial distribution at t_save_left (last 
         # time step before t_save), at t_save_right (first time step after 
