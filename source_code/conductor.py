@@ -5776,7 +5776,7 @@ class Conductor:
                         t1,
                         t2,
                         obj.store_sd_node[key]["t_save_left"],
-                        obj.coolant.dict_node_pt[key],
+                        obj.channel.dict_friction_factor[True]["total"]
                     )
 
         # Loop on SolidComponent to interpolate and store spatial distribution 
