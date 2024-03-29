@@ -5733,7 +5733,7 @@ class Conductor:
                     )
                 else:
                     obj.store_sd_node[key][t_save_key] = (
-                        obj.channel.dict_node_pt[key]
+                        obj.channel.dict_friction_factor[True]["total"]
                     )
 
         # Loop on SolidComponent to store spatial distribution of selected 
