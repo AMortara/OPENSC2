@@ -254,9 +254,8 @@ class StrandStabilizerComponent(StrandComponent):
                 * store_sd_node -> initialized data structure for spatial distribution in nodal points;
                 * store_sd_gauss -> initialized data structure for spatial distribution in Gauss points.
         """
-        prop_save_sd_node = (
-            "temperature",
-        )
+        # Leave the comma "," to get a tuple.
+        prop_save_sd_node = ("temperature",)
         
         # Data structure that stores spatial distribution (nodal points) at 
         # t_save_left (last time step before t_save) and at t_save (user 
