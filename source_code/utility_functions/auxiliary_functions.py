@@ -817,3 +817,34 @@ def check_flag_value(
 
     if flag_value not in flag_valid_values[flag_name]:
         raise ValueError(f"Value {flag_value} is not allowed for flag {flag_name}. Please check sheet {sheet_name} in file {file_path}.")
+
+def interp_at_t_save(
+    tt:float,
+    t1:float,
+    t2:float,
+    y1:np.ndarray,
+    y2:np.ndarray,
+    )->np.ndarray:
+    """Function that performs a linear interpolation in from t_save_left to t_save_right, in order to evaluate values at t_save exploiting array-smart notation. This function is not robust.
+    This function replaces np.interp1d. Indeed, due to data organization, it is not possible to exploit np.interp1d in array smart notation but a for loop is needed (see exhample below). Since this function si built to address this issue with the data organitazion, it is array smart and it is faster than np.interp1d.
+
+        # Exhample of usage of function np.interp1d.
+        # data is a (NN,3) np.array; first column (idx 0) stores values at t1, second column (idx 1) stores values at t2, third column (idx 2) stores interpolated values at tt
+        xp = np.array([t1,t2])
+        for ii in range(NN):
+            fp = np.array([data[ii,0],data[ii,1]])
+            data[ii,2] = np.interp(tt,xp,fp)
+
+    Args:
+        tt (float): time at which the values should be computed; corresponds to t_save.
+        t1 (float): time before tt; corresponds to t_save_left.
+        t2 (float): time after tt; corresponds to t_save_right.
+        y1 (np.ndarray): values at t1
+        y2 (np.ndarray): values at t2
+
+    Returns:
+        np.ndarray: interpolated values.
+    """
+
+    # Array-smart linear interpolation.
+    return y1 + (tt - t1) / (t2 - t1) * (y2 - y1)
