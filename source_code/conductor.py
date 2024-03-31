@@ -5762,6 +5762,54 @@ class Conductor:
             for key in obj.store_sd_gauss.keys():
                 obj.store_sd_gauss[key][t_save_key] = obj.dict_Gauss_pt[key]
 
+    def __store_sd_htc_conductor(
+        self,
+        interfaces:dict,
+        t_save_key:str="t_save_left"
+        ):
+        """Private method that stores spatial distribution values of heat transfer coefficients between conductor components in datastructure store_sd_node.
+        With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
+        The interfaces arguments allows to distinguish between costant htc and variable (computed by the software) htc. The costant htc will not be interpolated with method store_interp_spatial_distributions.
+
+        Args:
+            interfaces (dict): dictionary that collects interfaces identifiers for all the possible interfaces bewteen conductor components as collected in attributes self.variable_htc_interf and self.costant_htc_interf. It allows to distinguish between costant htc and variable (computed by the software) htc.
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save_left".
+        """
+
+        for interf_id in interfaces["htc_ch_ch_open"]:
+            self.store_sd_node["htc_ch_ch_open"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["ch_ch"]["Open"][interf_id]
+            )
+
+        for interf_id in interfaces["htc_ch_ch_close"]:
+            self.store_sd_node["htc_ch_ch_close"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["ch_ch"]["Close"][interf_id]
+            )
+        
+        for interf_id in interfaces["htc_ch_sol"]:
+            self.store_sd_node["htc_ch_sol"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["ch_sol"][interf_id]
+            )
+        for interf_id in interfaces["htc_sol_sol_cond"]:
+            self.store_sd_node["htc_sol_sol_cond"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["sol_sol"]["cond"][interf_id]
+            )
+        
+        for interf_id in interfaces["htc_sol_sol_rad"]:
+            self.store_sd_node["htc_sol_sol_rad"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["sol_sol"]["rad"][interf_id]
+            )
+        
+        for interf_id in interfaces["htc_env_sol_conv"]:
+            self.store_sd_node["htc_env_sol_conv"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["env_sol"][interf_id]["conv"]
+            )
+        
+        for interf_id in interfaces["htc_env_sol_rad"]:
+            self.store_sd_node["htc_env_sol_rad"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["env_sol"][interf_id]["rad"]
+            )
+
     def store_spatial_distributions(self, t_save_key:str="t_save_left"):
         """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss.
         With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
