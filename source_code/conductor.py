@@ -6014,3 +6014,181 @@ class Conductor:
                     obj.store_sd_node,
                     obj.store_sd_gauss
                 ) = obj.initialize_store_sd(N_nod,N_elem,prop_gauss)
+
+    def __get_cost_and_var_htc_interfaces(self, simulation):
+        """Private method that identifies all the interfaces between conductor components that are characterized by a variable heat transfer coefficient (computed by the software) or by a costant heat transfer coefficient and saves them in attributes variable_htc_interf and constant_htc_interf respectively. These attributes are dictionaries with the following keywords:
+
+            * htc_ch_ch_open,
+            * htc_ch_ch_close,
+            * htc_ch_sol,
+            * htc_sol_sol_cond,
+            * htc_sol_sol_rad,
+            * htc_env_sol_conv,
+            * htc_env_sol_rad.
+
+        To each key corresponds a tuple with the interface names.
+        These attributes are used to make interpolation only of the variable heat transfer coefficients while saving spatial distributions at user defined time steps.
+
+        Args:
+            simulation (object): object with all information about the simulation.
+        """
+
+        # Alias
+        interf_flag = self.dict_df_coupling["contact_perimeter_flag"]
+        
+        # Initialize attribute variable_htc_interf keys to empty list whith 
+        # dictionary comprehension. Start from second item (index 1) because 
+        # "zcoord" is not related to heat transfer coefficients
+        self.variable_htc_intef = {
+            key:[] for key in self.relevant_prop_node["Conductor"][1:]
+        }
+
+        # Initialize attribute costant_htc_interf keys to empty list whith 
+        # dictionary comprehension. Start from second item (index 1) because 
+        # "zcoord" is not related to heat transfer coefficients
+        self.costant_htc_intef = {
+            key:[] for key in self.relevant_prop_node["Conductor"][1:]
+        }
+
+        for rr, fluid_comp_r in enumerate(self.inventory["FluidComponent"].collection):
+            # Read the submatrix containing information about channel - solid 
+            # objects iterfaces.
+            # Nested loop on channel - solid objects
+            for s_comp in self.inventory["SolidComponent"].collection:
+                # Rationale: append item to the list only if there is a 
+                # interface characterized by a variable heat transfer 
+                # coefficient.
+                flag_interf = abs(interf_flag.at[
+                        fluid_comp_r.identifier, s_comp.identifier
+                    ]
+                )
+                if flag_interf == 1:
+                    flag_coupling = self.dict_df_coupling["HTC_choice"].at[
+                        fluid_comp_r.identifier, s_comp.identifier
+                    ]
+                    interf_id = self.dict_topology["ch_sol"][
+                        fluid_comp_r.identifier][
+                        s_comp.identifier
+                    ]
+                    if flag_coupling == 2:
+                        self.variable_htc_intef["htc_ch_sol"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == -2:
+                        self.costant_htc_intef["htc_ch_sol"].append(
+                            interf_id
+                        )
+
+            # Nested loop on channel - channel objects
+            for _, fluid_comp_c in enumerate(
+                self.inventory["FluidComponent"].collection[rr + 1 :]
+            ):
+                flag_interf = abs(interf_flag.at[
+                        fluid_comp_r.identifier, fluid_comp_c.identifier
+                    ]
+                )
+                if flag_interf == 1:
+                    flag_coupling = self.dict_df_coupling["HTC_choice"].at[
+                        fluid_comp_r.identifier, fluid_comp_c.identifier
+                    ]
+                    interf_id = self.dict_topology["ch_ch"][
+                        fluid_comp_r.identifier][
+                        fluid_comp_c.identifier
+                    ]
+                    if flag_coupling == 2:
+                        # Heat transfer by convection.
+                        self.variable_htc_intef["htc_ch_ch_close"].append(
+                            interf_id
+                        )
+                        self.variable_htc_intef["htc_ch_ch_open"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == -2:
+                        # Heat transfer by convection.
+                        self.costant_htc_intef["htc_ch_ch_close"].append(
+                            interf_id
+                        )
+                        self.costant_htc_intef["htc_ch_ch_open"].append(
+                            interf_id
+                        )
+        # end for loop rr
+
+        # Nested loop on solid - solid objects
+        for rr, s_comp_r in enumerate(
+            self.inventory["SolidComponent"].collection
+        ):
+            for _, s_comp_c in enumerate(
+                self.inventory["SolidComponent"].collection[rr + 1 :]
+            ):
+                flag_interf = abs(interf_flag.at[
+                            s_comp_r.identifier, s_comp_c.identifier
+                        ]
+                    )
+                if flag_interf == 1:
+                    flag_coupling = self.dict_df_coupling["HTC_choice"].at[
+                            s_comp_r.identifier, s_comp_c.identifier
+                        ]
+                    interf_id = self.dict_topology["sol_sol"][
+                        s_comp_r.identifier][
+                        s_comp_c.identifier
+                    ]
+                    if flag_coupling == 1:
+                        # Heat transfer by conduction.
+                        self.variable_htc_intef["htc_sol_sol_cond"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == -1:
+                        # Heat transfer by conduction.
+                        self.costant_htc_intef["htc_sol_sol_cond"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == 3:
+                        # Heat transfer by radiation.
+                        self.variable_htc_intef["htc_sol_sol_rad"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == -3:
+                        # Heat transfer by radiation.
+                        self.costant_htc_intef["htc_sol_sol_rad"].append(
+                            interf_id
+                        )
+            # end for loop cc
+
+            key = f"{simulation.environment.KIND}_{s_comp_r.identifier}"
+
+            flag_interf = abs(interf_flag.at[
+                    simulation.environment.KIND, s_comp_r.identifier
+                ]
+            )
+            if flag_interf == 1:
+                flag_coupling = self.dict_df_coupling["HTC_choice"].at[
+                            simulation.environment.KIND, s_comp_r.identifier
+                        ]
+                if flag_coupling == 2:
+                    # Heat transfer by convection.
+                    self.variable_htc_intef["htc_env_sol_conv"].append(key)
+                elif flag_coupling == -2:
+                    # Heat transfer by convection.
+                    self.costant_htc_intef["htc_env_sol_conv"].append(key)
+
+                if (flag_coupling == 3 or flag_coupling == 4):
+                    # Heat tranfer by radiation (|flag_coupling| = 3) or by 
+                    # radiation and convection (|flag_coupling| = 4).
+                    self.variable_htc_intef["htc_env_sol_rad"].append(key)
+                elif flag_coupling == -3 or flag_coupling == -4:
+                    # Heat tranfer by radiation (|flag_coupling| = 3) or by 
+                    # radiation and convection (|flag_coupling| = 4).
+                    self.costant_htc_intef["htc_env_sol_rad"].append(key)
+        # end for loop rr
+
+        # Convert list into tuple to have an immutable collection of interfaces 
+        # identifiers.
+        self.variable_htc_intef = {
+            key:tuple(val) for key,val in self.variable_htc_intef.items()
+        }
+
+        # Convert list into tuple to have an immutable collection of interfaces 
+        # identifiers.
+        self.costant_htc_intef = {
+            key:tuple(val) for key,val in self.costant_htc_intef.items()
+        }
