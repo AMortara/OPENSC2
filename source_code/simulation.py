@@ -342,6 +342,11 @@ class Simulation:
             conductor.compute_radiative_heat_exhange_jk()
             # Compute radiative heat exchanged outer jacket and environment.
             conductor.compute_heat_exchange_jk_env(self.environment)
+
+            # Store values of selected quantities at 0.0 s. These stored 
+            # quantities will be saved in file as spatial distributions by 
+            # calling function save_simulation_space.
+            conductor.store_spatial_distributions_t0("t_save")
             # get the times at which users saves the solution spatial distribution \
             # (cdp, 10/2020)
             # list_values = list(conductor.dict_Space_save.values())
