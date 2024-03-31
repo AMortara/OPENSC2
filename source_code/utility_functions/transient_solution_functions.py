@@ -582,16 +582,22 @@ def step(conductor, envionment, qsource, num_step):
     )
 
     # Evaluate the norm of the solution.
-    conductor.dict_norm["Solution"] = eval_sub_array_norm(Known,conductor)
+    conductor.dict_norm["Solution"] = eval_sub_array_norm(
+        conductor.dict_Step["SYSVAR"][:, 0],conductor
+    )
 
     # COMPUTE THE NORM OF THE SOLUTION CHANGE, THE EIGENVALUES AND RECOVER THE \
     # VARIABLES FROM THE SYSTEM SOLUTION (START)
 
     # Those are arrays
     # Solution change
-    CHG = Known - conductor.dict_Step["SYSVAR"][:, 0]
+    CHG = conductor.dict_Step["SYSVAR"][:, 0] - prv_sysvar
     # Eigenvalues (sort of??)
-    EIG = abs(CHG / conductor.time_step) / (abs(Known) + TINY)
+    EIG = (
+        abs(CHG / conductor.time_step)
+        / (abs(conductor.dict_Step["SYSVAR"][:, 0]) + TINY)
+    )
+    
     # Evaluate the norm of the solution change.
     conductor.dict_norm["Change"] = eval_sub_array_norm(CHG,conductor)
     
