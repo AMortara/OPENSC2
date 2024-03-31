@@ -353,6 +353,7 @@ class Simulation:
                 ],
                 abs(self.n_digit_time),
             )
+            conductor.i_save += 1
         # end for ii (cdp, 10/2020)
         # while loop to solve transient at each timestep (cdp, 07/2020)
         while (
@@ -486,22 +487,72 @@ class Simulation:
                     # Update counter to store the state of the simulation, still to come \
                     # (cdp, 08/2020)
                     count_store = count_store + 1
-                if (
-                    conductor.i_save < len(conductor.Space_save) - 1
-                    and abs(
-                        conductor.cond_time[-1] - conductor.Space_save[conductor.i_save]
-                    )
-                    < conductor.time_step / 2.0
-                ):
-                    # save simulation spatial distribution at user defined time steps \
-                    # (cdp, 08/2020)
-                    save_simulation_space(
-                        conductor,
-                        self.dict_path[
-                            f"Output_Spatial_distribution_{conductor.identifier}_dir"
-                        ],
-                        abs(self.n_digit_time),
-                    )
+                
+                # Boolean flag to identify if time is the neighborhood of the 
+                # user defined save time:
+                # t in [t_save - dt_max, t_save + dt_max]
+                flag_t_save = abs(
+                    conductor.Space_save[conductor.i_save]
+                    - conductor.cond_time[-1]
+                    ) <= conductor.time_step #self.transient_input["STPMAX"]
+                # Boolean flag to identify if time is in the left subinterval 
+                # [t_save - dt_max,t_save] (true) or in the right one 
+                # [t_save, t_save + dt_max] (false).
+                from_left = (
+                    conductor.Space_save[conductor.i_save]
+                    > conductor.cond_time[-1]
+                )
+
+                if (conductor.i_save < conductor.i_save_max and flag_t_save):
+                    
+                    # Check if user defined save time is approached from the 
+                    # left.
+                    if from_left:
+                        
+                        # User defined save time is approached from the left.
+
+                        # Save the time at which simulation spatial 
+                        # distributions are stored. This time is called 
+                        # t_save_left since it approaches the user defined 
+                        # time from the left.
+                        conductor.t_save_left = conductor.cond_time[-1]
+
+                        # Store simulation spatial distributions in keyword 
+                        # t_save_left of datastructure store_sd. These values 
+                        # are used to perform a linear interpolation in order 
+                        # to make an extimation of the spatial distribution 
+                        # values at the user defined time steps.
+                        conductor.store_spatial_distributions()
+
+                    else:
+                        
+                        # User defined save time is approached from the rigth.
+                        
+                        # Save the time at which simulation spatial 
+                        # distributions are stored. This time is called 
+                        # t_save_right since it approaches the user defined 
+                        # time from the rigth.
+                        conductor.t_save_right = conductor.cond_time[-1]
+
+                        # Store interpolated simulation spatial distributions 
+                        # in keyword t_save of datastructure store_sd.
+                        # The interpolation can be carried out directly without 
+                        # storing the values at t_save_right since the values 
+                        # at t_save_right are already available in a different 
+                        # data structure.
+                        conductor.store_interp_spatial_distributions()
+
+                        # Save simulation spatial distribution at user defined 
+                        # time steps (interpolated data)
+
+                        save_simulation_space(
+                            conductor,
+                            self.dict_path[
+                                f"Output_Spatial_distribution_{conductor.identifier}_dir"
+                            ],
+                            abs(self.n_digit_time),
+                        )
+                        conductor.i_save += 1
                 # end if isave
                 # Save variables time evolution at given spatial coordinates \
                 # (cdp, 08/2020)
