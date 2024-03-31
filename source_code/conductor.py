@@ -5828,6 +5828,22 @@ class Conductor:
             self.heat_exchange_jk_env
         )
 
+    def store_spatial_distributions_t0(self,t_save_key:str="t_save"):
+        """Method that stores spatial distribution values of selected quantities in datastructure store_sd_node and store_sd_gauss at t = 0 s.
+        These quantities are listed in attributes self.relevant_prop_node and self.relevant_prop_gauss.
+
+        Args:
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save".
+        """
+
+        self.__store_sd_components(t_save_key)
+        self.__store_sd_conductor(t_save_key)
+        # Costant vales of the htc are stored directy in keyword t_save since 
+        # there is no need for linear interpolation. These values will be no 
+        # longer updated during the simulation
+        self.__store_sd_htc_conductor(self.costant_htc_intef,t_save_key)
+        self.__store_sd_htc_conductor(self.variable_htc_intef,t_save_key)
+
     def store_spatial_distributions(self, t_save_key:str="t_save_left"):
         """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss.
         With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
@@ -5853,38 +5869,6 @@ class Conductor:
             self.dict_node_pt["HTC"]["sol_sol"]["rad"]
         )
 
-        self.store_sd_gauss["zcoord_gauss"][t_save_key] = (
-            self.grid_features["zcoord_gauss"]
-        )
-        self.store_sd_gauss["heat_rad_jk"][t_save_key] = self.heat_rad_jk
-        self.store_sd_gauss["heat_exchange_jk_env"][t_save_key] = (
-            self.heat_exchange_jk_env
-        )
-
-        # Loop on FluidComponent to store spatial distribution of selected 
-        # variables in nodal points.
-        for obj in self.inventory["FluidComponent"].collection:
-            for key in obj.store_sd_node.keys():
-                if key != "friction_factor":
-                    obj.store_sd_node[key][t_save_key] = (
-                        obj.coolant.dict_node_pt[key]
-                    )
-                else:
-                    obj.store_sd_node[key][t_save_key] = (
-                        obj.channel.dict_friction_factor[True]["total"]
-                    )
-
-        # Loop on SolidComponent to store spatial distribution of selected 
-        # variables in nodal points.
-        for obj in self.inventory["SolidComponent"].collection:
-            for key in obj.store_sd_node.keys():
-                obj.store_sd_node[key][t_save_key] = obj.dict_node_pt[key]
-
-        # Loop on SolidComponent to store spatial distribution of selected 
-        # variables in Gauss points.
-        for obj in self.inventory["SolidComponent"].collection:
-            for key in obj.store_sd_gauss.keys():
-                obj.store_sd_gauss[key][t_save_key] = obj.dict_Gauss_pt[key]
 
     def store_interp_spatial_distributions(self):
         """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss at time t_save.
