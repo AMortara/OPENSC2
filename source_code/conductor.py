@@ -5846,28 +5846,29 @@ class Conductor:
 
     def store_spatial_distributions(self, t_save_key:str="t_save_left"):
         """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss.
+        These quantities are listed in attributes self.relevant_prop_node and self.relevant_prop_gauss.
         With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
 
         Args:
             t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save_left".
         """
 
-        self.store_sd_node["zcoord"][t_save_key] = self.grid_features["zcoord"]
-        self.store_sd_node["htc_ch_ch_open"][t_save_key] = (
-            self.dict_node_pt["HTC"]["ch_ch"]["Open"]
-        )
-        self.store_sd_node["htc_ch_ch_close"][t_save_key] = (
-            self.dict_node_pt["HTC"]["ch_ch"]["Close"]
-        )
-        self.store_sd_node["htc_ch_sol"][t_save_key] = (
-            self.dict_node_pt["HTC"]["ch_sol"]
-        )
-        self.store_sd_node["htc_sol_sol_cond"][t_save_key] = (
-            self.dict_node_pt["HTC"]["sol_sol"]["cond"]
-        )
-        self.store_sd_node["htc_sol_sol_rad"][t_save_key] = (
-            self.dict_node_pt["HTC"]["sol_sol"]["rad"]
-        )
+        # Store spatial distribution of conductor component properties in the 
+        # selected keyword (t_save_key). These stored values will be used to 
+        # evaluate the value of the properties at the user defined time step to 
+        # save spatial distributions.
+        self.__store_sd_components(t_save_key)
+        # Store spatial distribution of conductor quantities (mesh and heat 
+        # exchanged between conductor components) in the selected keyword 
+        # (t_save_key). These stored values will be used to evaluate the value 
+        # of the quantities at the user defined time step to save spatial 
+        # distributions.
+        self.__store_sd_conductor(t_save_key)
+        # Store spatial distributions of the variable htc between conductor 
+        # componetns in the selected keyword (t_save_key). These stored values 
+        # will be used to evaluate the value of the htc at the user defined 
+        # time step to save spatial distributions.
+        self.__store_sd_htc_conductor(self.variable_htc_intef,t_save_key)
 
 
     def store_interp_spatial_distributions(self):
