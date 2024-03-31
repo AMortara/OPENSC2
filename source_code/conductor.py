@@ -5810,6 +5810,24 @@ class Conductor:
                 self.dict_node_pt["HTC"]["env_sol"][interf_id]["rad"]
             )
 
+    def __store_sd_conductor(self, t_save_key:str="t_save_left"):
+        """Private method that stores spatial distribution values of the mesh and of the heat exchanged by conductor components datastructure store_sd_node and store_sd_gauss.
+        With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
+
+        Args:
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save_left".
+        """
+
+        self.store_sd_node["zcoord"][t_save_key] = self.grid_features["zcoord"]
+        
+        self.store_sd_gauss["zcoord_gauss"][t_save_key] = (
+            self.grid_features["zcoord_gauss"]
+        )
+        self.store_sd_gauss["heat_rad_jk"][t_save_key] = self.heat_rad_jk
+        self.store_sd_gauss["heat_exchange_jk_env"][t_save_key] = (
+            self.heat_exchange_jk_env
+        )
+
     def store_spatial_distributions(self, t_save_key:str="t_save_left"):
         """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss.
         With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
