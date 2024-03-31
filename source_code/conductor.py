@@ -1201,6 +1201,8 @@ class Conductor:
         self.num_step_save = np.zeros(self.Space_save.shape, dtype=int)
         self.i_save_max = len(self.Space_save) - 1
 
+        self.__get_cost_and_var_htc_interfaces(simulation)
+        
         self.__initialize_store_sd()
 
         # Load the content of column self.identifier of sheet Time in file conductors_disgnostic.xlsx as a series and convert to numpy array of float.
