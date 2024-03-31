@@ -302,6 +302,8 @@ class Conductor:
                 "htc_ch_sol",
                 "htc_sol_sol_cond",
                 "htc_sol_sol_rad",
+                "htc_env_sol_conv",
+                "htc_env_sol_rad",
             ),
         )
 
