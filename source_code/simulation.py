@@ -428,20 +428,6 @@ class Simulation:
                     self.num_step,
                 )
 
-                # Call function get_time_step to compute the new time step used 
-                # to compute the next value of the time at which the next 
-                # thermal-hydraulic solution will be evaluated. Moving the call 
-                # to function get_time_step after the call to funciton step 
-                # allows to avoid checking if num_step > 1 for each time step 
-                # and for each conductor. The initial value of the time step 
-                # for each conductor is defined at conductor instance and it is 
-                # equal to the user define time step.
-                conductor.time_step = get_time_step(
-                    conductor,
-                    self.transient_input,
-                    self.starter_file_path,
-                )
-
                 # Loop on FluidComponent (cdp, 10/2020)
                 for fluid_comp in conductor.inventory["FluidComponent"].collection:
                     # compute density and mass flow rate in nodal points with the
@@ -558,6 +544,21 @@ class Simulation:
                 # (cdp, 08/2020)
                 save_simulation_time(self, conductor)
                 # call sensor to plot results at any time the user asks (cdp, 07/2020)
+
+                # Call function get_time_step to compute the new time step used 
+                # to compute the next value of the time at which the next 
+                # thermal-hydraulic solution will be evaluated. Moving the call 
+                # to function get_time_step after the call to funciton step 
+                # allows to avoid checking if num_step > 1 for each time step 
+                # and for each conductor. The initial value of the time step 
+                # for each conductor is defined at conductor instance and it is 
+                # equal to the user define time step.
+                conductor.time_step = get_time_step(
+                    conductor,
+                    self.transient_input,
+                    self.starter_file_path,
+                )
+
             # End for conductor (cdp, 07/2020)
         # end while (cdp, 07/2020)
         print("End simulation called " + self.transient_input["SIMULATION"] + "\n")
