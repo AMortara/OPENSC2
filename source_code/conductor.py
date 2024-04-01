@@ -6080,7 +6080,7 @@ class Conductor:
         """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
         t_save_left (last time step before t_save) and at t_save (user defined time at which save spatial distribution).
         Attributes store_sd_node and store_sd_gauss are available not only for the class Conductor, but also for the classes FluidComponent, JacketComponent, StackComponent, StrandMixedComponent and StrandStabilizerComponent and are initialized calling method initialize_store_sd of these classes. Class FluidComponent does not have attribute store_sd_gauss.
-        In this method is also finalized the initialization of attributes self.relevant_prop_sd, self.header_sd_node_pt and self.relevant_prop_sd_num of class Conductor.
+        In this method is also finalized the initialization of attributes self.relevant_prop_sd, self.header_sd and self.relevant_prop_sd_num of class Conductor.
         """
 
         # Alias
@@ -6145,9 +6145,9 @@ class Conductor:
                 ) = obj.initialize_store_sd(N_nod,N_elem,prop_gauss)
 
                 if obj.operations["TCS_EVALUATION"]:
-                    self.header_sd_node_pt[name][obj_id] = "zcoord (m)\ttemperature (K)\tcurrent_sharing_temperature (K)\tcritical_current_density (A/m^2)"
+                    self.header_sd["node"][name][obj_id] = "zcoord (m)\ttemperature (K)\tcurrent_sharing_temperature (K)\tcritical_current_density (A/m^2)"
                 else:
-                    self.header_sd_node_pt[name][obj_id] = "zcoord (m)\ttemperature (K)\tcritical_current_density (A/m^2)"
+                    self.header_sd["node"][name][obj_id] = "zcoord (m)\ttemperature (K)\tcritical_current_density (A/m^2)"
                 # Finalinze initialization of attribute relevant_prop_sd_num; 
                 # +1 accounts for zcoord.
                 self.relevant_prop_sd_num["node"][name][obj_id] = (
