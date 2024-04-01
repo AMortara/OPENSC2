@@ -5816,7 +5816,11 @@ class Conductor:
         # variables in Gauss points.
         for obj in self.inventory["SolidComponent"].collection:
             for key in obj.store_sd_gauss.keys():
-                obj.store_sd_gauss[key][t_save_key] = obj.dict_Gauss_pt[key]
+                if key == "linear_power_el_resistance":
+                    vv = obj.dict_Gauss_pt[key][:, 0]
+                else:
+                    vv = obj.dict_Gauss_pt[key]
+                obj.store_sd_gauss[key][t_save_key] = vv
 
     def __store_sd_htc_conductor(
         self,
@@ -6068,12 +6072,16 @@ class Conductor:
         # of selected variables in Gauss points.
         for obj in self.inventory["SolidComponent"].collection:
             for key in obj.store_sd_gauss.keys():
+                if key == "linear_power_el_resistance":
+                    vv = obj.dict_Gauss_pt[key][:, 0]
+                else:
+                    vv = obj.dict_Gauss_pt[key]
                 obj.store_sd_gauss[key]["t_save"] = interp_at_t_save(
                         tt,
                         t1,
                         t2,
                         obj.store_sd_gauss[key]["t_save_left"],
-                        obj.dict_Gauss_pt[key],
+                        vv,
                     )
 
     def __initialize_store_sd(self):
