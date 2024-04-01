@@ -279,94 +279,10 @@ class Conductor:
         # Dictionary declaration (cdp, 09/2020)
         self.inventory = dict()
 
-        # Collection of the relevant properties to be saved as spatial 
-        # distribution (nodal points) at user defined time steps.
-        self.relevant_prop_node = dict(
-            FluidComponent = (
-                "velocity",
-                "pressure",
-                "temperature",
-                "total_density",
-                "friction_factor",
-            ),
-            JacketComponent = ("temperature",),# this is a tuple
-            StrandStabilizerComponent = ("temperature",), # this is a tuple
-            # Update after instance of StrandMixedComponent
-            StrandMixedComponent = dict(),
-            # Update after instance of StackComponent
-            StackComponent = dict(),
-            Conductor = (
-                "zcoord",
-                "htc_ch_ch_open",
-                "htc_ch_ch_close",
-                "htc_ch_sol",
-                "htc_sol_sol_cond",
-                "htc_sol_sol_rad",
-                "htc_env_sol_conv",
-                "htc_env_sol_rad",
-            ),
-        )
-
-        # Collection of the relevant properties to be saved as spatial 
-        # distribution (Gauss points) at user defined time steps.
-        self.relevant_prop_gauss = dict(
-            SolidComponent = (
-                "current_along",
-                "delta_voltage_along",
-                "linear_power_el_resistance",
-            ),
-            Conductor = (
-                "zcoord_gauss",
-                "heat_rad_jk",
-                "heat_exchange_jk_env",
-            ),
-        )
-
-        # Headers used in files of spatial distributions saved at user defined 
-        # time steps; relevant properties available in nodal points.
-        self.header_sd_node_pt = dict(
-            FluidComponent = "zcoord (m)\tvelocity (m/s)\tpressure (Pa)\ttemperature (K)\ttotal_density (kg/m^3)\tfriction_factor (~)",
-            JacketComponent = "zcoord (m)\ttemperature (K)",
-            StrandStabilizerComponent = "zcoord (m)\ttemperature (K)",
-            # Update after instance of StrandMixedComponent
-            StrandMixedComponent = dict(),
-            # Update after instance of StackComponent
-            StackComponent = dict(),
-        )
-
-        # Headers used in files of spatial distributions saved at user defined 
-        # time steps; relevant properties of SolidComponentes available in 
-        # Gauss points.
-        self.header_sd_Gauss_pt = (
-            "zcoord_gauss (m)\tcurrent_along (A)\tdelta_voltage_along (V)\tP_along (W/m)"
-        )
-
-        ready_keys = {
-            "FluidComponent",
-            "JacketComponent",
-            "StrandStabilizerComponent"
-        }
-        # Attribute that stores the number of relevant properties to be saved 
-        # at user defined time available in both node and Gauss points. +1 
-        # accounts for zcoord or zcoord_gauss. This quantities is used to 
-        # suitably initialize the number of colums in function 
-        # save_spatial_distribution.
-        self.relevant_prop_sd_num = dict(
-            node={
-                key: len(val) + 1 for key, val 
-                in self.relevant_prop_node.items() if key in ready_keys
-            },
-            gauss = len(self.relevant_prop_gauss["SolidComponent"]) + 1
-        )
-
-        not_ready_keys = {
-            "StrandMixedComponent",
-            "StackComponent",
-        }
-        # Initialize empty dictionary in correspondence of not ready keys.
-        self.relevant_prop_sd_num["node"].update(
-            {key:dict() for key in not_ready_keys}
-        )
+        # call method __initialize_attr_sd to initialize attributes useful to 
+        # deal with storage and saving of spatial distributions at user defined 
+        # times.
+        self.__initialize_attr_sd()
 
         # call method Conductor_components_instance to make instance of conductor components (cdp, 11/2020)
         # conductorlogger.debug(
