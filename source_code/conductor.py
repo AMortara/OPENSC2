@@ -6179,10 +6179,12 @@ class Conductor:
                     flag_coupling = self.dict_df_coupling["HTC_choice"].at[
                         fluid_comp_r.identifier, fluid_comp_c.identifier
                     ]
-                    interf_id = self.dict_topology["ch_ch"][
-                        fluid_comp_r.identifier][
-                        fluid_comp_c.identifier
-                    ]
+                    # Construct interface name: it can be found also in 
+                    # dict_topology["ch_ch"] but a search in dictionaties 
+                    # "Hydraulic_parallel" and "Thermal_contact" should be 
+                    # performed; it is simpler to construct interface names 
+                    # combining channels identifier.
+                    interf_id = f"{fluid_comp_r.identifier}_{fluid_comp_c.identifier}"
                     if flag_coupling == 2:
                         # Heat transfer by convection.
                         self.variable_htc_intef["htc_ch_ch_close"].append(
