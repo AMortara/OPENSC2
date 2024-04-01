@@ -341,6 +341,33 @@ class Conductor:
             "zcoord_gauss (m)\tcurrent_along (A)\tdelta_voltage_along (V)\tP_along (W/m)"
         )
 
+        ready_keys = {
+            "FluidComponent",
+            "JacketComponent",
+            "StrandStabilizerComponent"
+        }
+        # Attribute that stores the number of relevant properties to be saved 
+        # at user defined time available in both node and Gauss points. +1 
+        # accounts for zcoord or zcoord_gauss. This quantities is used to 
+        # suitably initialize the number of colums in function 
+        # save_spatial_distribution.
+        self.relevant_prop_sd_num = dict(
+            node={
+                key: len(val) + 1 for key, val 
+                in self.relevant_prop_node.items() if key in ready_keys
+            },
+            gauss = len(self.relevant_prop_gauss["SolidComponent"]) + 1
+        )
+
+        not_ready_keys = {
+            "StrandMixedComponent",
+            "StackComponent",
+        }
+        # Initialize empty dictionary in correspondence of not ready keys.
+        self.relevant_prop_sd_num["node"].update(
+            {key:dict() for key in not_ready_keys}
+        )
+
         # call method Conductor_components_instance to make instance of conductor components (cdp, 11/2020)
         # conductorlogger.debug(
         #     f"Before call method {self.conductor_components_instance.__name__}"
