@@ -164,9 +164,9 @@ def save_sd_gauss_comp(conductor, f_path:str):
     """
 
     # Alias
-    n_prop = conductor.relevant_prop_sd_num["gauss"]["SolidComponent"]
+    n_prop = conductor.relevant_prop_sd_num["gauss"]
     props = conductor.relevant_prop_sd["gauss"]["SolidComponent"]
-    headers = conductor.header_sd["gauss"]["SolidComponent"]
+    headers = conductor.header_sd["gauss"]
 
     for obj in conductor.inventory["SolidComponent"].collection:
         file_path = os.path.join(
