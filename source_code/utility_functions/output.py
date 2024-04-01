@@ -109,21 +109,51 @@ def save_sd_nodal_comp(conductor, f_path:str, comp_type:str):
             * StrantStabilizerComponent
     """
 
-    # Alias
-    n_prop = conductor.relevant_prop_sd_num["node"][comp_type]
-    props = conductor.relevant_prop_sd["node"][comp_type]
-    headers = conductor.header_sd["node"][comp_type]
+    if (
+        comp_type == "FluidComponent" 
+        or comp_type == "JacketComponent" 
+        or comp_type == "StrandStabilizerComponent"):
+        # Alias
+        n_prop = conductor.relevant_prop_sd_num["node"][comp_type]
+        props = conductor.relevant_prop_sd["node"][comp_type]
+        headers = conductor.header_sd["node"][comp_type]
 
-    for obj in conductor.inventory[comp_type].collection:
-        file_path = os.path.join(
-            f_path, f"{obj.identifier}_({conductor.cond_num_step})_sd.tsv"
-        )
-        AA = np.zeros((conductor.grid_features["N_nod"], n_prop))
-        AA[:, 0] = conductor.store_sd_node["zcoord"]["t_save"]
-        for prop_idx, prop_name in enumerate(props,1):
-            AA[:, prop_idx] = obj.store_sd_node[prop_name]["t_save"]
-        with open(file_path, "w") as writer:
-            np.savetxt(writer, AA, delimiter="\t", header=headers, comments="")
+        for obj in conductor.inventory[comp_type].collection:
+            file_path = os.path.join(
+                f_path,
+                f"{obj.identifier}_({conductor.cond_num_step})_sd.tsv"
+            )
+            AA = np.zeros((conductor.grid_features["N_nod"], n_prop))
+            AA[:, 0] = conductor.store_sd_node["zcoord"]["t_save"]
+            for prop_idx, prop_name in enumerate(props,1):
+                AA[:, prop_idx] = obj.store_sd_node[prop_name]["t_save"]
+            with open(file_path, "w") as writer:
+                np.savetxt(
+                    writer, AA, delimiter="\t", header=headers, comments=""
+                )
+    elif (
+        comp_type == "StackComponent"
+        or comp_type == "StrandMixedComponent"
+        ):
+        # Alias
+        n_prop = conductor.relevant_prop_sd_num["node"][comp_type]
+        props = conductor.relevant_prop_sd["node"][comp_type]
+        headers = conductor.header_sd["node"][comp_type]
+
+        for obj in conductor.inventory[comp_type].collection:
+            obj_id = obj.identifier
+            file_path = os.path.join(
+                f_path,
+                f"{obj_id}_({conductor.cond_num_step})_sd.tsv"
+            )
+            AA = np.zeros((conductor.grid_features["N_nod"], n_prop[obj_id]))
+            AA[:, 0] = conductor.store_sd_node["zcoord"]["t_save"]
+            for prop_idx, prop_name in enumerate(props[obj_id],1):
+                AA[:, prop_idx] = obj.store_sd_node[prop_name]["t_save"]
+            with open(file_path, "w") as writer:
+                np.savetxt(
+                    writer, AA, delimiter="\t", header=headers[obj_id], comments=""
+                )
 
 def save_sd_gauss_comp(conductor, f_path:str):
     """Funcition that saves spatial distributions of selected properties at user defined time step. This version of the function deals with spatial distribution in Gauss nodal points.
