@@ -5886,7 +5886,7 @@ class Conductor:
 
     def store_spatial_distributions_t0(self,t_save_key:str="t_save"):
         """Method that stores spatial distribution values of selected quantities in datastructure store_sd_node and store_sd_gauss at t = 0 s.
-        These quantities are listed in attributes self.relevant_prop_node and self.relevant_prop_gauss.
+        These quantities are listed in attribute self.relevant_prop_sd.
 
         Args:
             t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save".
@@ -5902,7 +5902,7 @@ class Conductor:
 
     def store_spatial_distributions(self, t_save_key:str="t_save_left"):
         """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss.
-        These quantities are listed in attributes self.relevant_prop_node and self.relevant_prop_gauss.
+        These quantities are listed in attributes self.relevant_prop_sd.
         With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
 
         Args:
@@ -6080,13 +6080,13 @@ class Conductor:
         """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
         t_save_left (last time step before t_save) and at t_save (user defined time at which save spatial distribution).
         Attributes store_sd_node and store_sd_gauss are available not only for the class Conductor, but also for the classes FluidComponent, JacketComponent, StackComponent, StrandMixedComponent and StrandStabilizerComponent and are initialized calling method initialize_store_sd of these classes. Class FluidComponent does not have attribute store_sd_gauss.
-        In this method is also finalized the initialization of attributes self.relevant_prop_node, self.header_sd_node_pt and self.relevant_prop_sd_num of class Conductor.
+        In this method is also finalized the initialization of attributes self.relevant_prop_sd, self.header_sd_node_pt and self.relevant_prop_sd_num of class Conductor.
         """
 
         # Alias
         N_nod = self.grid_features["N_nod"]
         N_elem = self.grid_input["NELEMS"]
-        prop_gauss = self.relevant_prop_gauss["SolidComponent"]
+        prop_gauss = self.relevant_prop_sd["gauss"]["SolidComponent"]
 
         self.store_sd_node = dict()
         self.store_sd_gauss = dict()
@@ -6100,7 +6100,7 @@ class Conductor:
         )
         # Start from the second element (index 1) because "zcoord" is 
         # initialized before
-        for prop in self.relevant_prop_node["Conductor"][1:]:
+        for prop in self.relevant_prop_sd["node"]["Conductor"][1:]:
             self.store_sd_node[prop] = dict(
                 t_save_left = dict(),
                 t_save = dict(),
@@ -6110,7 +6110,7 @@ class Conductor:
             t_save_left = np.zeros(N_elem),
             t_save = np.zeros(N_elem),
         )
-        for prop in self.relevant_prop_gauss["Conductor"][1:]:
+        for prop in self.relevant_prop_sd["gauss"]["Conductor"][1:]:
             self.store_sd_gauss[prop] = dict(
                 t_save_left = dict(),
                 t_save = dict(),
@@ -6139,7 +6139,7 @@ class Conductor:
                     # relevant_prop_node. This is done to allow the user to 
                     # choose whether or not to compute (and store) the current 
                     # sharing temperature at each thermal hydraulic time step.
-                    self.relevant_prop_node[name][obj_id],
+                    self.relevant_prop_sd["node"][name][obj_id],
                     obj.store_sd_node,
                     obj.store_sd_gauss,
                 ) = obj.initialize_store_sd(N_nod,N_elem,prop_gauss)
@@ -6151,7 +6151,7 @@ class Conductor:
                 # Finalinze initialization of attribute relevant_prop_sd_num; 
                 # +1 accounts for zcoord.
                 self.relevant_prop_sd_num["node"][name][obj_id] = (
-                    1 + len(self.relevant_prop_node[name][obj_id])
+                    1 + len(self.relevant_prop_sd["node"][name][obj_id])
                 )
 
         class_name = ("JacketComponent","StrandStabilizerComponent")
@@ -6194,14 +6194,14 @@ class Conductor:
         # dictionary comprehension. Start from second item (index 1) because 
         # "zcoord" is not related to heat transfer coefficients
         self.variable_htc_intef = {
-            key:[] for key in self.relevant_prop_node["Conductor"][1:]
+            key:[] for key in self.relevant_prop_sd["node"]["Conductor"][1:]
         }
 
         # Initialize attribute costant_htc_interf keys to empty list whith 
         # dictionary comprehension. Start from second item (index 1) because 
         # "zcoord" is not related to heat transfer coefficients
         self.costant_htc_intef = {
-            key:[] for key in self.relevant_prop_node["Conductor"][1:]
+            key:[] for key in self.relevant_prop_sd["node"]["Conductor"][1:]
         }
 
         for rr, fluid_comp_r in enumerate(self.inventory["FluidComponent"].collection):
