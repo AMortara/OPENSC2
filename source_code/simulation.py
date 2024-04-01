@@ -355,8 +355,7 @@ class Simulation:
                 conductor,
                 self.dict_path[
                     f"Output_Spatial_distribution_{conductor.identifier}_dir"
-                ],
-                abs(self.n_digit_time),
+                ]
             )
             conductor.i_save += 1
         # end for ii (cdp, 10/2020)
@@ -541,7 +540,6 @@ class Simulation:
                             self.dict_path[
                                 f"Output_Spatial_distribution_{conductor.identifier}_dir"
                             ],
-                            abs(self.n_digit_time),
                         )
                         conductor.i_save += 1
                 # end if isave
@@ -581,7 +579,6 @@ class Simulation:
             save_simulation_space(
                 cond,
                 self.dict_path[f"Output_Spatial_distribution_{cond.identifier}_dir"],
-                abs(self.n_digit_time),
             )
             # Call function Save_properties to save the conductor final 
             # solution.
