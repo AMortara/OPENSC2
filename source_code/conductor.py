@@ -322,6 +322,25 @@ class Conductor:
             ),
         )
 
+        # Headers used in files of spatial distributions saved at user defined 
+        # time steps; relevant properties available in nodal points.
+        self.header_sd_node_pt = dict(
+            FluidComponent = "zcoord (m)\tvelocity (m/s)\tpressure (Pa)\ttemperature (K)\ttotal_density (kg/m^3)\tfriction_factor (~)",
+            JacketComponent = "zcoord (m)\ttemperature (K)",
+            StrandStabilizerComponent = "zcoord (m)\ttemperature (K)",
+            # Update after instance of StrandMixedComponent
+            StrandMixedComponent = dict(),
+            # Update after instance of StackComponent
+            StackComponent = dict(),
+        )
+
+        # Headers used in files of spatial distributions saved at user defined 
+        # time steps; relevant properties of SolidComponentes available in 
+        # Gauss points.
+        self.header_sd_Gauss_pt = (
+            "zcoord_gauss (m)\tcurrent_along (A)\tdelta_voltage_along (V)\tP_along (W/m)"
+        )
+
         # call method Conductor_components_instance to make instance of conductor components (cdp, 11/2020)
         # conductorlogger.debug(
         #     f"Before call method {self.conductor_components_instance.__name__}"
@@ -6024,7 +6043,7 @@ class Conductor:
         """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
         t_save_left (last time step before t_save) and at t_save (user defined time at which save spatial distribution).
         Attributes store_sd_node and store_sd_gauss are available not only for the class Conductor, but also for the classes FluidComponent, JacketComponent, StackComponent, StrandMixedComponent and StrandStabilizerComponent and are initialized calling method initialize_store_sd of these classes. Class FluidComponent does not have attribute store_sd_gauss.
-        In this method is also finalized the initialization of attribute relevant_prop_node of class Conductor.
+        In this method is also finalized the initialization of attributes self.relevant_prop_node and self.header_sd_node_pt of class Conductor.
         """
 
         # Alias
@@ -6087,6 +6106,11 @@ class Conductor:
                     obj.store_sd_node,
                     obj.store_sd_gauss,
                 ) = obj.initialize_store_sd(N_nod,N_elem,prop_gauss)
+
+                if obj.operations["TCS_EVALUATION"]:
+                    self.header_sd_node_pt[name][obj_id] = "zcoord (m)\ttemperature (K)\tcurrent_sharing_temperature (K)\tcritical_current_density (A/m^2)"
+                else:
+                    self.header_sd_node_pt[name][obj_id] = "zcoord (m)\ttemperature (K)\tcritical_current_density (A/m^2)"
 
         class_name = ("JacketComponent","StrandStabilizerComponent")
         for name in class_name:
