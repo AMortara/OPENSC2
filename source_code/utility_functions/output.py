@@ -125,6 +125,30 @@ def save_sd_nodal_comp(conductor, f_path:str, comp_type:str):
         with open(file_path, "w") as writer:
             np.savetxt(writer, AA, delimiter="\t", header=headers, comments="")
 
+def save_sd_gauss_comp(conductor, f_path:str):
+    """Funcition that saves spatial distributions of selected properties at user defined time step. This version of the function deals with spatial distribution in Gauss nodal points.
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        f_path (str): folder path where to store spatial distributions.
+    """
+
+    # Alias
+    n_prop = conductor.relevant_prop_sd_num["gauss"]["SolidComponent"]
+    props = conductor.relevant_prop_sd["gauss"]["SolidComponent"]
+    headers = conductor.header_sd["gauss"]["SolidComponent"]
+
+    for obj in conductor.inventory["SolidComponent"].collection:
+        file_path = os.path.join(
+            f_path, f"{obj.identifier}_({conductor.cond_num_step})_gauss_sd.tsv"
+        )
+        AA = np.zeros((conductor.grid_input["NELEMS"], n_prop))
+        AA[:, 0] = conductor.store_sd_gauss["zcoord_gauss"]["t_save"]
+        for prop_idx, prop_name in enumerate(props,1):
+            AA[:, prop_idx] = obj.store_sd_gauss[prop_name]["t_save"]
+        with open(file_path, "w") as writer:
+            np.savetxt(writer, AA, delimiter="\t", header=headers, comments="")
+
 def save_simulation_space(conductor, f_path, n_digit_time):
 
     """
