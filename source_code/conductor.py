@@ -404,6 +404,100 @@ class Conductor:
     def __repr__(self):
         return f"{self.__class__.__name__}(Type: {self.KIND}, identifier: {self.identifier})"
     
+    def __initialize_attr_sd(self):
+        """Private method that initializes useful attributes used to deal with storage and savings of spatial distributions at user defined time.
+        Initialized attributes are:
+            * self.relevant_prop_sd
+            * self.header_sd
+            * self.relevant_prop_sd_num
+        """
+
+        self.relevant_prop_sd = dict(
+            # Collection of the relevant properties to be saved as spatial 
+            # distribution (nodal points) at user defined time steps.
+            node = dict(
+                FluidComponent = (
+                    "velocity",
+                    "pressure",
+                    "temperature",
+                    "total_density",
+                    "friction_factor",
+                ),
+                JacketComponent = ("temperature",),# this is a tuple
+                StrandStabilizerComponent = ("temperature",), # this is a tuple
+                # Update after instance of StrandMixedComponent
+                StrandMixedComponent = dict(),
+                # Update after instance of StackComponent
+                StackComponent = dict(),
+                Conductor = (
+                    "zcoord",
+                    "htc_ch_ch_open",
+                    "htc_ch_ch_close",
+                    "htc_ch_sol",
+                    "htc_sol_sol_cond",
+                    "htc_sol_sol_rad",
+                    "htc_env_sol_conv",
+                    "htc_env_sol_rad",
+                ),
+            ),
+            # Collection of the relevant properties to be saved as spatial 
+            # distribution (Gauss points) at user defined time steps.
+            gauss = dict(
+                SolidComponent = (
+                    "current_along",
+                    "delta_voltage_along",
+                    "linear_power_el_resistance",
+                ),
+                Conductor = (
+                    "zcoord_gauss",
+                    "heat_rad_jk",
+                    "heat_exchange_jk_env",
+                ),
+            )
+        )
+
+        self.header_sd = dict(
+            # Headers used in files of spatial distributions saved at user 
+            # defined time steps; relevant properties available in nodal points.
+            node = dict(
+                FluidComponent = "zcoord (m)\tvelocity (m/s)\tpressure (Pa)\ttemperature (K)\ttotal_density (kg/m^3)\tfriction_factor (~)",
+                JacketComponent = "zcoord (m)\ttemperature (K)",
+                StrandStabilizerComponent = "zcoord (m)\ttemperature (K)",
+                # Update after instance of StrandMixedComponent
+                StrandMixedComponent = dict(),
+                # Update after instance of StackComponent
+                StackComponent = dict(),
+            ),
+            gauss = "zcoord_gauss (m)\tcurrent_along (A)\tdelta_voltage_along (V)\tP_along (W/m)"
+        )
+
+        ready_keys = {
+            "FluidComponent",
+            "JacketComponent",
+            "StrandStabilizerComponent"
+        }
+        # Attribute that stores the number of relevant properties to be saved 
+        # at user defined time available in both node and Gauss points. +1 
+        # accounts for zcoord or zcoord_gauss. This quantities is used to 
+        # suitably initialize the number of colums in function 
+        # save_spatial_distribution.
+        self.relevant_prop_sd_num = dict(
+            node={
+                key: len(val) + 1 for key, val 
+                in self.relevant_prop_sd["node"].items() if key in ready_keys
+            },
+            gauss = len(self.relevant_prop_sd["gauss"]["SolidComponent"]) + 1
+        )
+
+        not_ready_keys = {
+            "StrandMixedComponent",
+            "StackComponent",
+        }
+        # Initialize empty dictionary in correspondence of not ready keys.
+        self.relevant_prop_sd_num["node"].update(
+            {key:dict() for key in not_ready_keys}
+        )
+
     def __check_conductor_coupling(self:Self):
         """Private method that performs checks on user defined input file conductor_coupling.xlsx.
 
