@@ -149,155 +149,43 @@ def save_sd_gauss_comp(conductor, f_path:str):
         with open(file_path, "w") as writer:
             np.savetxt(writer, AA, delimiter="\t", header=headers, comments="")
 
-def save_simulation_space(conductor, f_path, n_digit_time):
+def save_simulation_space(conductor, f_path:str):
 
     """
     Function that save on files with suitable file names transient solution,
-    spatial coordinate discretization, time and time step for each conductor
-    (cdp, 08/2020)
+    spatial coordinate discretization, time and time step for each conductor.
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        f_path (str): folder path where to store spatial distributions.
     """
 
-    # Save transient solution for each Conductor objects at each \
-    # iteration_store iteration. For each conductor component, solution is \
-    # stored in a dedicated file. FluidComponent stored variables are velocity, \
-    # pressure and temperature together with spatial discretization, while for \
-    # SolidComponent only temperature and spatial discretization are stored. \
-    # (cdp, 08/2020)
-    # Hypothesis: for different input files parameters there are different \
-    # simulation names (cdp, 08/2020)
+    # Save transient solution for each Conductor objects at each 
+    # iteration_store iteration. For each conductor component, solution is
+    # stored in a dedicated file. FluidComponent stored variables are velocity, 
+    # pressure and temperature together with spatial discretization, while for 
+    # SolidComponent only temperature and spatial discretization are stored. 
+    # Hypothesis: for different input files parameters there are different 
+    # simulation names
 
-    # get the time at which the saving is made
-    time = round(conductor.Space_save[conductor.i_save], n_digit_time)
+    # Alias
     conductor.num_step_save[conductor.i_save] = conductor.cond_num_step
-    # end if len(tt[0]) (cdp, 12/2020)
-    prop_chan = (
-        "zcoord",
-        "velocity",
-        "pressure",
-        "temperature",
-        "total_density",
-        "friction_factor",
-    )
-    header_chan = "zcoord (m)\tvelocity (m/s)\tpressure (Pa)\ttemperature (K)\ttotal_density (kg/m^3)\tfriction_factor (~)"
-    for fluid_comp in conductor.inventory["FluidComponent"].collection:
-        file_path = os.path.join(
-            f_path, f"{fluid_comp.identifier}_({conductor.cond_num_step})_sd.tsv"
-        )
-        A_chan = np.zeros((conductor.grid_features["N_nod"], len(prop_chan)))
-        for prop_idx, prop_name in enumerate(prop_chan):
-            if prop_name == "zcoord":
-                A_chan[:, prop_idx] = conductor.grid_features[prop_name]
-            elif prop_name != "friction_factor":
-                A_chan[:, prop_idx] = fluid_comp.coolant.dict_node_pt[prop_name]
-            else:
-                # Save friction factor
-                A_chan[:, prop_idx] = fluid_comp.channel.dict_friction_factor[True]["total"]
-            # end if prop_name
-        # end for ii
-        with open(file_path, "w") as writer:
-            np.savetxt(writer, A_chan, delimiter="\t", header=header_chan, comments="")
-    # end for fluid_comp (cdp, 10/2020)
-    # headers_s_comp = "zcoord (m)\ttemperature (K)\tdensity (kg/m^3)\tspec_heat_p (J/kg/K)\tther_cond (W/m/K)\tEXFTLX (W/m)\tJHTFLX (W/m^2)"
-    # prop_s_comp = ["zcoord", "temperature", "total_density", "total_isobaric_specific_heat", \
-    # "total_thermal_conductivity", "EXTFLX", "JHTFLX"]
-    # Dictionary with headers for the file.
+    
+    component_type = {
+        "FluidComponent",
+        "JacketComponent",
+        "StackComponent",
+        "StrandMixedComponent",
+        "StrandStabilizerComponent",
+    }
 
-    Prop_list = namedtuple("Prop_list",["full","reduced"])
-
-    headers = dict(
-        sc=Prop_list(
-            full="zcoord (m)\ttemperature (K)\tcurrent_sharing_temperature (K)\tcritical_current_density (A/m^2)",
-            reduced="zcoord (m)\ttemperature (K)\tcritical_current_density (A/m^2)",
-        ),
-        stab="zcoord (m)\ttemperature (K)",
-    )
-    prop = dict(
-        sc=Prop_list(
-            full=("zcoord", "temperature", "T_cur_sharing", "J_critical"),
-            reduced=("zcoord", "temperature", "J_critical"),
-        ),
-        stab=("zcoord", "temperature"),
-    )
-    for strand in conductor.inventory["StrandComponent"].collection:
-        file_path = os.path.join(
-            f_path, f"{strand.identifier}_({conductor.cond_num_step})_sd.tsv"
-        )
-        if strand.KIND != "StrandStabilizerComponent":
-            # Check if current sharing temperature is evaluated at each
-            # thermal time step.
-            if strand.operations["TCS_EVALUATION"]:
-                headers_strand = headers["sc"].full
-                prop_strand = prop["sc"].full
-            else:
-                headers_strand = headers["sc"].reduced
-                prop_strand = prop["sc"].reduced
-        else:
-            headers_strand = headers["stab"]
-            prop_strand = prop["stab"]
-
-        A_strand = np.zeros(
-            (conductor.grid_features["N_nod"], len(prop_strand))
-        )
-        for prop_idx, prop_name in enumerate(prop_strand):
-            if prop_name == "zcoord":
-                A_strand[:, prop_idx] = conductor.grid_features[prop_name]
-            else:
-                A_strand[:, prop_idx] = strand.dict_node_pt[prop_name]
-            # end if prop_name
-        # end for ii
-        with open(file_path, "w") as writer:
-            np.savetxt(
-                writer, A_strand, delimiter="\t", header=headers_strand, comments=""
-            )
-
-    headers_jk = "zcoord (m)\ttemperature (K)"
-    prop_jk = ("zcoord", "temperature")
-    # Loop to save jacket properties spatial distribution.
-    for jk in conductor.inventory["JacketComponent"].collection:
-        file_path = os.path.join(
-            f_path, f"{jk.identifier}_({conductor.cond_num_step})_sd.tsv"
-        )
-        A_jk = np.zeros((conductor.grid_features["N_nod"], len(prop_jk)))
-        for prop_idx, prop_name in enumerate(prop_jk):
-            if prop_name == "zcoord":
-                A_jk[:, prop_idx] = conductor.grid_features[prop_name]
-            else:
-                A_jk[:, prop_idx] = jk.dict_node_pt[prop_name]
-            # end if prop_name
-        # end for ii
-        with open(file_path, "w") as writer:
-            np.savetxt(writer, A_jk, delimiter="\t", header=headers_jk, comments="")
-    # end for s_comp
+    for comp_type in component_type:
+        save_sd_nodal_comp(conductor, f_path, comp_type)
+    
     # Save linear power due to electric resistance along the SOs (available in
     # gauss nodal points).
-    headers_s_comp = (
-        "zcoord_gauss (m)\tcurrent_along (A)\tdelta_voltage_along (V)\tP_along (W/m)"
-    )
-    prop_s_comp = (
-        "zcoord_gauss",
-        "current_along",
-        "delta_voltage_along",
-        "linear_power_el_resistance",
-    )
-    for s_comp in conductor.inventory["SolidComponent"].collection:
-        file_path = os.path.join(
-            f_path, f"{s_comp.identifier}_({conductor.cond_num_step})_gauss_sd.tsv"
-        )
-        A_s_comp = np.zeros((conductor.grid_input["NELEMS"], len(prop_s_comp)))
-        for prop_idx, prop_name in enumerate(prop_s_comp):
-            if prop_name == "zcoord_gauss":
-                A_s_comp[:, prop_idx] = conductor.grid_features[prop_name]
-            else:
-                if prop_name == "linear_power_el_resistance":
-                    A_s_comp[:, prop_idx] = s_comp.dict_Gauss_pt[prop_name][:, 0]
-                else:
-                    A_s_comp[:, prop_idx] = s_comp.dict_Gauss_pt[prop_name]
-            # end if prop_name
-        # end for ii
-        with open(file_path, "w") as writer:
-            np.savetxt(
-                writer, A_s_comp, delimiter="\t", header=headers_s_comp, comments=""
-            )
+    save_sd_gauss_comp(conductor,f_path)
+    
 
     # Check if dictionary conductor.heat_rad_jk is not empty in order to save the content in a file.
     if bool(conductor.heat_rad_jk):
@@ -374,30 +262,7 @@ def save_simulation_space(conductor, f_path, n_digit_time):
             dtype=float,
         ).to_csv(f_path_htc_sol_sol_rad, sep="\t", index=False, header=True)
 
-    # Save the actual times at which the simulation spatial distributions are \
-    # saved (cdp, 01/2021)
-    file_name = "Time_sd_actual.tsv"
-    path_save = os.path.join(f_path, file_name)
-    if conductor.i_save == 0:
-        with open(path_save, "w") as writer:
-            np.savetxt(
-                writer,
-                np.array([conductor.cond_time[-1]]),
-                header="time (s)",
-                comments="",
-                delimiter="\t",
-            )
-    else:
-        with open(path_save, "a") as writer:
-            np.savetxt(
-                writer, np.array([conductor.cond_time[-1]]), comments="", delimiter="\t"
-            )
-    # end if conductor.i_save (cdp, 01/2021)
-    # update conductor.i_save (cdp, 01/2021)
-    conductor.i_save = conductor.i_save + 1
-
-
-# end function Save_simulation_space (cdp, 10/2020)
+# end function save_simulation_space
 
 
 def reorganize_spatial_distribution(cond, f_path, n_digit_time):
