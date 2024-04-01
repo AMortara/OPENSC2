@@ -95,6 +95,36 @@ def save_properties(conductor, f_path):
 # end function Save_properties
 
 
+def save_sd_nodal_comp(conductor, f_path:str, comp_type:str):
+    """Funcition that saves spatial distributions of selected properties at user defined time step. This version of the function deals with spatial distribution in nodal points.
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        f_path (str): folder path where to store spatial distributions.
+        comp_type (str): class name of the conductor component objects for which spatial distributions are be saved. Possible values:
+            * FludiComponent
+            * JacketComponent
+            * StackComponent
+            * StrandMixedComponent
+            * StrantStabilizerComponent
+    """
+
+    # Alias
+    n_prop = conductor.relevant_prop_sd_num["node"][comp_type]
+    props = conductor.relevant_prop_sd["node"][comp_type]
+    headers = conductor.header_sd["node"][comp_type]
+
+    for obj in conductor.inventory[comp_type].collection:
+        file_path = os.path.join(
+            f_path, f"{obj.identifier}_({conductor.cond_num_step})_sd.tsv"
+        )
+        AA = np.zeros((conductor.grid_features["N_nod"], n_prop))
+        AA[:, 0] = conductor.store_sd_node["zcoord"]["t_save"]
+        for prop_idx, prop_name in enumerate(props,1):
+            AA[:, prop_idx] = obj.store_sd_node[prop_name]["t_save"]
+        with open(file_path, "w") as writer:
+            np.savetxt(writer, AA, delimiter="\t", header=headers, comments="")
+
 def save_simulation_space(conductor, f_path, n_digit_time):
 
     """
