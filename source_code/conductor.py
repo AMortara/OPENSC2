@@ -414,6 +414,18 @@ class Conductor:
             {key:dict() for key in not_ready_keys}
         )
 
+        # Dictionary with prefix of the temporary files that store spatial 
+        # distributions of htc between conductor components.
+        self.file_htc_sd_pref = dict(
+            htc_ch_ch_open = "HTC_ch_ch_o",
+            htc_ch_ch_close = "HTC_ch_ch_c",
+            htc_ch_sol = "HTC_ch_sol",
+            htc_sol_sol_cond = "HTC_sol_sol_cond",
+            htc_sol_sol_rad = "HTC_sol_sol_rad",
+            htc_env_sol_conv = "HTC_env_sol_conv",
+            htc_env_sol_rad = "HTC_env_sol_rad",
+        )
+
     def __check_conductor_coupling(self:Self):
         """Private method that performs checks on user defined input file conductor_coupling.xlsx.
 
