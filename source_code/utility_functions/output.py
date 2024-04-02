@@ -196,13 +196,20 @@ def save_cond_htc_sd(conductor, f_path:str):
         f_path (str): folder path where to store spatial distributions.
     """
 
-    for key, val in conductor.store_sd_node.items():
-        if val["t_save"]:
-            file_name = f"{conductor.file_htc_sd_pref[key]}_({conductor.cond_num_step})_sd.tsv"
+    # Loop on items of dict file_htc_sd_pref to avoid following error.
+    # ValueError: The truth value of an array with more than one element is 
+    # ambiguous. Use a.any() or a.all().
+    # The error arised if the loop is on items of dict store_sd_node 
+    # because keyword "zcoord" stores array and not a dictionary. Another 
+    # possible solution is to loop on store_sd_node and check that key is not 
+    # zcoord. The chosen soltution does not require this check.
+    for key, val in conductor.file_htc_sd_pref.items():
+        if conductor.store_sd_node[key]["t_save"]:
+            file_name = f"{val}_({conductor.cond_num_step})_sd.tsv"
             file_path = os.path.join(f_path, file_name)
             # Build the dataframe from dictionary and save it as tsv file.
             pd.DataFrame.from_dict(
-                val["t_save"],
+                conductor.store_sd_node[key]["t_save"],
                 dtype=float,
             ).to_csv(file_path, sep="\t", index=False, header=True)
 
