@@ -179,7 +179,7 @@ def save_sd_gauss_comp(conductor, f_path:str):
         with open(file_path, "w") as writer:
             np.savetxt(writer, AA, delimiter="\t", header=headers, comments="")
 
-def save_cond_htc_sd(conductor, f_path:str):
+def save_conductor_sd(conductor, f_path:str):
     """
     Function that saves spatial distributions of heat transfer coefficients between conductor components and heat exchanged between conductor components at user defined time step (on temporary files).
     List of saved quantities:
@@ -289,7 +289,7 @@ def save_simulation_space(conductor, f_path:str):
 
     # Call function to save spatial distributions of heat transfer coefficients 
     # between conductor components.
-    save_cond_htc_sd(conductor, f_path)
+    save_conductor_sd(conductor, f_path)
 
 # end function save_simulation_space
 
