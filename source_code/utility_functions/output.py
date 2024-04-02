@@ -515,6 +515,12 @@ def reorganize_spatial_distribution(cond, f_path, n_digit_time):
     # Manage files with radiative heat transfer coefficients between solid components.
     reorganize_heat_sd(cond, f_path, "HTC_sol_sol_rad", "HTC_rad", n_digit_time)
 
+    # Manage files with convective heat transfer coefficients between 
+    # environment and solid components.
+    reorganize_heat_sd(cond, f_path, "HTC_env_sol_conv", "HTC_conv", n_digit_time)
+    # Manage files with radiative heat transfer coefficients between 
+    # environment and solid components.
+    reorganize_heat_sd(cond, f_path, "HTC_env_sol_rad", "HTC_rad", n_digit_time)
 
 # end function Reorganize_spatial_distribution (cdp, 11/2020)
 
