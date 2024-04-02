@@ -264,31 +264,9 @@ def save_simulation_space(conductor, f_path:str):
     # Save linear power due to electric resistance along the SOs (available in
     # gauss nodal points).
     save_sd_gauss_comp(conductor,f_path)
-    
-
-    # Check if dictionary conductor.heat_rad_jk is not empty in order to save the content in a file.
-    if bool(conductor.heat_rad_jk):
-        # Build path to save temporary file with the spatial distribution of the heat exchanged by radiation between jackets at each required time step.
-        f_path_heat_rad = os.path.join(
-            f_path, f"Heat_rad_inner_({conductor.cond_num_step})_sd.tsv"
-        )
-        # Build the dataframe from dictionary and save it as tsv file.
-        pd.DataFrame.from_dict(conductor.heat_rad_jk, dtype=float).to_csv(
-            f_path_heat_rad, sep="\t", index=False, header=True
-        )
-
-    if bool(conductor.heat_exchange_jk_env):
-        # Build path to save temporary file with the spatial distribution of the heat exchanged by convection and/or radiation between outer surface of the conductor and the environment at each required time step.
-        f_path_ex_jk_env = os.path.join(
-            f_path, f"Heat_exch_env_({conductor.cond_num_step})_sd.tsv"
-        )
-        # Build the dataframe from dictionary and save it as tsv file.
-        pd.DataFrame.from_dict(conductor.heat_exchange_jk_env, dtype=float).to_csv(
-            f_path_ex_jk_env, sep="\t", index=False, header=True
-        )
 
     # Call function to save spatial distributions of heat transfer coefficients 
-    # between conductor components.
+    # and heat exchanged between conductor components in temporary files.
     save_conductor_sd(conductor, f_path)
 
 # end function save_simulation_space
