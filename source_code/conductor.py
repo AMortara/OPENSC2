@@ -426,6 +426,13 @@ class Conductor:
             htc_env_sol_rad = "HTC_env_sol_rad",
         )
 
+        # Dictionary with prefix of the temporary files that store spatial 
+        # distributions of heat exchanged between conductor components.
+        self.file_heat_sd_pref = dict(
+            heat_rad_jk = "Heat_rad_inner",
+            heat_exchange_jk_env = "Heat_exch_env",
+        )
+
     def __check_conductor_coupling(self:Self):
         """Private method that performs checks on user defined input file conductor_coupling.xlsx.
 
