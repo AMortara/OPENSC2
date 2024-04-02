@@ -181,7 +181,7 @@ def save_sd_gauss_comp(conductor, f_path:str):
 
 def save_cond_htc_sd(conductor, f_path:str):
     """
-    Function that saves spatial distributions of heat transfer coefficients between conductor components at user defined time step (on temporary files).
+    Function that saves spatial distributions of heat transfer coefficients between conductor components and heat exchanged between conductor components at user defined time step (on temporary files).
     List of saved quantities:
         * heat transfer coefficients of the open fraction between fluid components
         * heat transfer coefficients of the closed fraction between fluid components
@@ -190,6 +190,8 @@ def save_cond_htc_sd(conductor, f_path:str):
         * radiative heat transfer coefficients between solid components
         * convective heat transfer coefficients between environment and solid components
         * radiative heat transfer coefficients between environment and solid components
+        * heat exchanged by radiation between jackets
+        * heat exchanged by convection and/or radiation between outer surface of the conductor and the environment
 
     Args:
         conductor (Conductor): object with all the information of the conductor.
@@ -203,6 +205,8 @@ def save_cond_htc_sd(conductor, f_path:str):
     # because keyword "zcoord" stores array and not a dictionary. Another 
     # possible solution is to loop on store_sd_node and check that key is not 
     # zcoord. The chosen soltution does not require this check.
+
+    # Save heat transfer coefficients between conductor components.
     for key, val in conductor.file_htc_sd_pref.items():
         if conductor.store_sd_node[key]["t_save"]:
             file_name = f"{val}_({conductor.cond_num_step})_sd.tsv"
@@ -210,6 +214,17 @@ def save_cond_htc_sd(conductor, f_path:str):
             # Build the dataframe from dictionary and save it as tsv file.
             pd.DataFrame.from_dict(
                 conductor.store_sd_node[key]["t_save"],
+                dtype=float,
+            ).to_csv(file_path, sep="\t", index=False, header=True)
+    
+    # Save heat exchanged between conductor components.
+    for key, val in conductor.file_heat_sd_pref.items():
+        if conductor.store_sd_gauss[key]["t_save"]:
+            file_name = f"{val}_({conductor.cond_num_step})_sd.tsv"
+            file_path = os.path.join(f_path, file_name)
+            # Build the dataframe from dictionary and save it as tsv file.
+            pd.DataFrame.from_dict(
+                conductor.store_sd_gauss[key]["t_save"],
                 dtype=float,
             ).to_csv(file_path, sep="\t", index=False, header=True)
 
