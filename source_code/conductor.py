@@ -4321,6 +4321,12 @@ class Conductor:
                 ii :: self.inventory["StrandComponent"].number
             ]
 
+            obj.dict_node_pt["current_along"] = np.interp(
+                        self.grid_features["zcoord"],
+                        self.grid_features["zcoord_gauss"],
+                        obj.dict_Gauss_pt["current_along"]
+                        )
+
             obj.dict_Gauss_pt["delta_voltage_along"] = delta_voltage_along[
                 ii :: self.inventory["StrandComponent"].number
             ]
@@ -4881,7 +4887,7 @@ class Conductor:
             else:
                 # Update only electrical resistivity (stabilizer) at each 
                 # electric time step.
-                if isinstance(strand,StrandMixedComponent):
+                if isinstance(strand,StrandMixedComponent) or isinstance(strand,StackComponent):
                     strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity_not_sc(
                             strand.dict_node_pt
                         )
