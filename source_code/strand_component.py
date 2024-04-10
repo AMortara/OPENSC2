@@ -270,7 +270,7 @@ class StrandComponent(SolidComponent):
         # evaluation of the current densities the total superconducting 
         # perpendicular cross section is always used.
         jop = (
-            np.abs(dict_dummy["op_current"])
+            np.abs(dict_dummy["current_along"])
             / (self.cross_section["sc"])
         )
 
