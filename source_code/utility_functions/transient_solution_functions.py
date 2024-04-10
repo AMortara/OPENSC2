@@ -82,6 +82,43 @@ def get_time_step(
     # Introduce to avoid division by zero in the evaluation of t_step_comp.
     tiny_value = 1e-10
 
+    if conductor.force_next_tstep_flag:
+        # Flag conductor.force_next_tstep_flag is true only if the previous 
+        # time step was corrected to force the beginning of an event (like 
+        # localized heating) at the desired time, i.e. the one prescribed by 
+        # the user. When it is true, the current time step (dt) is set equal to 
+        # the previous one. This occurs when, with the value for dt computed by 
+        # function get_time_step, the time t_k and t_{k+1} are such that
+        # t_k < t_e < t_{k+1}.
+        # with t_k the current time, t_{k+1} the next time and t_e the time at 
+        # which an event shoudl occur (like the benning or the ending of a 
+        # localized heating).
+        # In this situation t_e would be missed, so a new forced value for dt 
+        # is evaluated as dt_f = t_e - t_k. Then the next time steps are 
+        # t_{k+1} = t_e
+        # t_{k+2} = t_e + dt_f
+        # (this last definition is made thanks to this if statement).
+        conductor.force_next_tstep_flag = False
+        print(
+            f"Forced {conductor.identifier} time step: {conductor.next_time_step} s\n"
+        )
+        return conductor.next_time_step
+
+    if conductor.force_min_tstep_flag:
+        # Flag conductor.force_min_tstep_flag is true only if the calculated 
+        # time step (dt) was such that 
+        # t_{k+1} = t_k + dt > t_e 
+        # with t_k the current time, t_{k+1} the next time and t_e the time at 
+        # which an event shoudl occur (like the benning or the ending of a 
+        # localized heating). In order to not miss the event, in this case the 
+        # time step is forced to be equal to the minimum one untill t_e is 
+        # reached. Then the time step is managed according to the value of flag 
+        # iadaptime.
+        print(
+            f"Forced {conductor.identifier} min time step: {t_step_min} s\n"
+        )
+        return t_step_min
+
     if iadaptime == 0:
         
         time_step = min(
