@@ -154,9 +154,9 @@ def get_time_step(
             opt_tstep = t_step_comp[idx_first_temp:].min()
 
         # Tune the time step smoothly
-        if prv_time_step < 0.5 * opt_tstep:
+        if prv_time_step < 0.25 * opt_tstep: # old value was 0.5
             time_step = prv_time_step * transient_input["MLT_INCREASE"]
-        elif prv_time_step > 1.0 * opt_tstep:
+        elif prv_time_step > 0.8 * opt_tstep: # old value was 1.0
             time_step = prv_time_step * transient_input["MLT_DECREASE"]
         else:
             time_step = prv_time_step
