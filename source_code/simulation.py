@@ -116,6 +116,9 @@ class Simulation:
             }
         )
 
+        # Uncertainty associated to the time step
+        self.epsilon = 1e-6
+
     # end method __init__ (cdp, 06/2020)
 
     def __count_sigfigs(self,num:Union[int,float]):
