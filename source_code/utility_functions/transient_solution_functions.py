@@ -259,6 +259,86 @@ def time_and_event_synchronization(
 
     return conductor
 
+def force_time_step(
+    conductor: Conductor,
+    t_step_min: float,
+    ) -> Conductor:
+    
+    """Function that forces the time step if the value of the time step 
+    computed with function get_time_step is such that the next event in the 
+    time line will be missed.
+    This occurs when, with the value for dt computed by function get_time_step, 
+    the time t_k and t_{k+1} are such that
+    t_k < t_e < t_{k+1}.
+    with t_k the current time, t_{k+1} the next time and t_e the time at 
+    which an event shoudl occur (like the benning or the ending of a 
+    localized heating).
+    In this situation t_e would be missed, so a new forced value for dt 
+    is evaluated as dt_f = t_e - t_k. Then the next time steps are 
+    t_{k+1} = t_e
+    t_{k+2} = t_e + dt_f
+    The value of dt_f is controlled with tstep_min_lb, see the description for 
+    further details.
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        t_step_min (float): minimum value for the time step as defined by the user.
+
+    Returns:
+        Conductor: conductor object with the following updated attributes
+            * cond_time
+            * cond_num_step
+            * appended_time_flag
+            * time_step
+            * force_next_tstep_flag
+            * next_time_step
+            * i_event
+    """
+
+    # Alias
+    # The last evaluated time (t_k)
+    time_k = conductor.cond_time[-1]
+    # Time that will be evaluated with the value of the time step returned by 
+    # function get_time_step (remember that function get_time_step is called 
+    # before this function) and that would be used to compute the next 
+    # thermal-hydraulic solution.
+    time_kp1 = time_k + conductor.time_step
+    # Index of the time event that should occur in the timeline
+    i_event = conductor.i_event
+    # Time at which the next event should occur
+    time_e = conductor.events_time[i_event]
+
+    # Check if t_k < t_e < t_{k+1}
+    if time_k < time_e and time_kp1 > time_e:
+        # t_k < t_e < t_{k+1}: need to force the time step in order to not miss 
+        # the event at t_e.
+
+        # Force time step so that t_{k+1} = t_e:
+        # dt_f = t_e - t_k
+        time_step = time_e - conductor.cond_time[-1]
+        print(
+            f"Forced {conductor.identifier} time step: {time_step} s\n"
+        )
+
+        # Append the time of the event as the next item of list cond_time
+        conductor.append_time(time_e)
+        conductor.time_step = time_step
+        # Force next time step so that t_{k+2} = t_e + dt_f
+        conductor.force_next_tstep_flag = True
+        if time_step < t_step_min:
+            # The possibility that time_step < epsilon is avoided by function 
+            # syncronize_time_and_event. epsilon is the uncertainty associated 
+            # to the time step.
+            # Assign next time step value
+            conductor.next_time_step = time_step
+        else:
+            conductor.next_time_step = t_step_min
+        
+        # Ask to update i_event if possible.
+        conductor.move_to_next_event()
+
+    return conductor
+
 def step(conductor, envionment, qsource, num_step):
 
     """
