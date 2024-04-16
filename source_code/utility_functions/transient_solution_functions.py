@@ -104,21 +104,6 @@ def get_time_step(
         )
         return conductor.next_time_step
 
-    if conductor.force_min_tstep_flag:
-        # Flag conductor.force_min_tstep_flag is true only if the calculated 
-        # time step (dt) was such that 
-        # t_{k+1} = t_k + dt > t_e 
-        # with t_k the current time, t_{k+1} the next time and t_e the time at 
-        # which an event shoudl occur (like the benning or the ending of a 
-        # localized heating). In order to not miss the event, in this case the 
-        # time step is forced to be equal to the minimum one untill t_e is 
-        # reached. Then the time step is managed according to the value of flag 
-        # iadaptime.
-        print(
-            f"Forced {conductor.identifier} min time step: {t_step_min} s\n"
-        )
-        return t_step_min
-
     if iadaptime == 0:
         
         time_step = min(
