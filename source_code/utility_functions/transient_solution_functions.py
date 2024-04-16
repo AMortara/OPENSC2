@@ -201,6 +201,64 @@ def user_adaptive_time_step(conductor:Conductor,transient_input:dict)->float:
 
     return time_step
 
+def time_and_event_synchronization(
+    conductor: Conductor,
+    epsilon: float,
+    t_step_min: float,
+    ) -> Conductor:
+
+    """Function that syncronizes the time and the time of the event if their difference in absolute value is smaller than the uncertainty associated to the time step, i.e. |t_{k+1} - t_e| < epsilon.
+    If it is the case, the event is associated to time t_{k+1} so that t_{k+1} = t_e withouth changing the time step length (since the event is in the neighborhood of t_{k+1}).
+    When an event is detected the next time step is forced to be the minimum time step defined by the user.
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        epsilon (float): uncertainty associated to the time step to detect events and diagnostic saving times.
+        t_step_min (float): minimum value for the time step as defined by the user.
+
+    Returns:
+        Conductor: conductor object with the following updated attributes
+            * cond_time
+            * cond_num_step
+            * appended_time_flag
+            * force_next_tstep_flag
+            * next_time_step
+            * i_event
+    """
+
+    # Alias
+    # The last evaluated time (t_k)
+    time_k = conductor.cond_time[-1]
+    # Time that will be evaluated with the value of the time step returned by 
+    # function get_time_step (remember that function get_time_step is called 
+    # before this function) and that would be used to compute the next 
+    # thermal-hydraulic solution.
+    time_kp1 = time_k + conductor.time_step
+    # Index of the time event that should occur in the timeline
+    i_event = conductor.i_event
+    # Time at which the next event should occur
+    time_e = conductor.events_time[i_event]
+
+    if (time_e >= time_kp1 - epsilon and time_e <= time_kp1 + epsilon):
+        # Force only the time without changing the time step since 
+        # |t_{k+1} - t_e| < epsilon
+        # epsilon is the accepted uncertainty on the time step.
+
+        # Append the time of the event as the next item of list cond_time
+        conductor.append_time(time_e)
+        # When an event is detected, the next time step should be the minimum.
+        conductor.force_next_tstep_flag = True
+        # The next time function get_time_step is called for the current 
+        # conductor, the selected value for the time step will be the one 
+        # stored in conductor.next_time_step. (When this function is called, 
+        # the value of the time step for the next thermal hydraulic step is 
+        # already known, the force value will be the one next one).
+        conductor.next_time_step = t_step_min
+        # Ask to update i_event if possible.
+        conductor.move_to_next_event()
+
+    return conductor
+
 def step(conductor, envionment, qsource, num_step):
 
     """
