@@ -1306,7 +1306,7 @@ class Conductor:
         # End if self.Time_save.max() > self.inputs["ZLENGTH"]
 
         # Initialize attributes events_time, i_event and i_event_max
-        self.__collect_event_time()
+        self.__collect_event_time(simulation)
         ## Attributes to deal with adaptive time step
         self.appended_time_flag = False
         self.next_time_step = 0.0
