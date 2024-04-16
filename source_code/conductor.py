@@ -4887,9 +4887,13 @@ class Conductor:
             else:
                 # Update only electrical resistivity (stabilizer) at each 
                 # electric time step.
-                if isinstance(strand,StrandMixedComponent) or isinstance(strand,StackComponent):
+                if isinstance(strand,StrandMixedComponent):
                     strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity_not_sc(
                             strand.dict_node_pt
+                        )
+                elif isinstance(strand, StackComponent):
+                    strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.stack_electrical_resistivity_not_sc(
+                        strand.dict_Gauss_pt
                         )
                 elif isinstance(strand, StrandStabilizerComponent):
                     strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity(
@@ -4979,7 +4983,11 @@ class Conductor:
                 # electric time step.
                 if isinstance(strand,StrandMixedComponent):
                     strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity_not_sc(
-                            strand.dict_Gauss_pt
+                        strand.dict_Gauss_pt
+                        )
+                elif isinstance(strand, StackComponent):
+                    strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.stack_electrical_resistivity_not_sc(
+                        strand.dict_Gauss_pt
                         )
                 elif isinstance(strand, StrandStabilizerComponent):
                     strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity(
