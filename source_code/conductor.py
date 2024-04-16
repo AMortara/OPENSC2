@@ -6408,3 +6408,20 @@ class Conductor:
         if self.i_event < self.i_event_max:
             # Move to the next event index.
             self.i_event += 1
+
+    def append_time(self,time:float):
+        """Method that appends inplace a new item (time) to the list of times.
+        The method updates the state of the following attributes:
+            * self.cond_time
+            * self.cond_num_step
+            * self.appended_time_flag
+
+        Args:
+            time (float): time to be appended to the list
+        """
+        # Append the time of the event as the next item of list cond_time
+        self.cond_time.append(time)
+        # Update the counter of time steps
+        self.cond_num_step += 1
+        # Keep track of the already appended item in cond_time
+        self.appended_time_flag = True
