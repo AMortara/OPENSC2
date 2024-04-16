@@ -6400,3 +6400,11 @@ class Conductor:
         self.events_time = np.unique(self.events_time)
         self.i_event = 0
         self.i_event_max = len(self.events_time) - 1
+
+    def move_to_next_event(self):
+        """Method that updates inplace the event index moving to the next event in the timeline.
+        The method updates the state of attribute self.i_event.
+        """
+        if self.i_event < self.i_event_max:
+            # Move to the next event index.
+            self.i_event += 1
