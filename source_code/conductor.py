@@ -6432,3 +6432,49 @@ class Conductor:
         self.cond_num_step += 1
         # Keep track of the already appended item in cond_time
         self.appended_time_flag = True
+
+
+    def __check_event_time_main_input(self, l_event:list,simulation):
+        """Private method that checks if each difference between the ending and the beginning of the heating defined in input file conductor_operation.xlsx can be discretized with at least 10 time steps. If it is not the case, an error is raised.
+
+        Args:
+            l_event (list): list containig values of TQBEG (in the first half) and of TQEND (in the second half).
+            simulation (simulation): simulation object with all the info of the simulation.
+
+        Raises:
+            ValueError: if any of the difference TQEND - TQBEG in file conductor_operation.xlsx cannot be discretized with at least 10 time steps (if flag IADAPTIME = 0) or minimum time step (if flag IADAPTIME = 1 or IADAPTIME = 2).
+        """
+        
+        dt_switch = {
+            0: simulation.transient_input["TIME_STEP"],
+            1: simulation.transient_input["STPMIN"],
+            2: simulation.transient_input["STPMIN"],
+        }
+
+        dt_label_switch = {
+            0: "time step",
+            1: "minimum time step",
+            2: "minimum time step",
+        }
+
+        dt = dt_switch[simulation.transient_input["IADAPTIME"]]
+        dt_label = dt_label_switch[simulation.transient_input["IADAPTIME"]]
+
+        if l_event:
+            # Convert l_event to a temporary numpy array.
+            tmp_event = np.array(l_event)
+            # Index at which the end time of the event are stored. Use round to 
+            # get an integer.
+            i_tqend = round(len(tmp_event) / 2)
+            # Compute difference tqend - tqbeg for each defined heating form 
+            # main input file conductor_operation.xlsx.
+            diff = tmp_event[i_tqend:] - tmp_event[:i_tqend]
+            # Check that tqend - tqbeg is >= 10*dt. If it is not the case an 
+            # error is raised.
+            if any(diff < 1e1 * dt):
+                # At least one difference tqend - tqbeg is < 10*dt: raise an 
+                # error.
+                file_path = os.path.join(
+                    self.BASE_PATH, self.file_input["OPERATION"]
+                )
+                raise ValueError(f"Selected {dt_label} is to large for suitably discretize all the defined heating period in file {file_path}.\n Please, reduce the {dt_label} such that each difference TQEND - TQBEG is discretized with at least 10 {dt_label}.")
