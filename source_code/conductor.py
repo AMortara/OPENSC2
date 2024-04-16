@@ -6383,19 +6383,30 @@ class Conductor:
             key:tuple(val) for key,val in self.costant_htc_intef.items()
         }
 
-    def __collect_event_time(self):
+    def __collect_event_time(self,simulation):
         """Private method that collects the user defined times at which events (like heating and current variation) should occur in a numpy array. The numpy array is stored as attribute of the conductor. The method defines the following conductor attributes:
             * events_time: unique and sorted np array with all the times at which events occur;
             * i_event: counter of the event;
             * i_event_max: maximum allowed value to i_event.
+
+        Args:
+            simulation (simulation): simulation object with all the info of the simulation.
         """
 
         keys = ("TQBEG","TQEND")
+
         # Collect the times of the events (heating) when IQFUN = 1 (heating is 
-        # set up in input file conductor_operation.xlsx).
+        # set up in input file conductor_operation.xlsx). The order is first 
+        # all TQBEG values than all TQEND values. Order is important as will 
+        # affect the behaviour of method self.__check_event_time_main_input.
         event_list = [
-            obj.operations[key] for obj in self.inventory["SolidComponent"].collection for key in keys if obj.operations["IQFUN"] == 1
+            obj.operations[key] for key in keys for obj in self.inventory["SolidComponent"].collection if obj.operations["IQFUN"] == 1
         ]
+
+        # Check if selected time step or minimum time step is too large to 
+        # discretize each heating period in input file conductor_operation.xlsx.
+        self.__check_event_time_main_input(event_list,simulation)
+
         # To be done: deal with IQFUN -1 (-2), current and magnetic field from 
         # user defined input file.
         
