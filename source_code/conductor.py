@@ -1305,6 +1305,13 @@ class Conductor:
             )
         # End if self.Time_save.max() > self.inputs["ZLENGTH"]
 
+        # Initialize attributes events_time, i_event and i_event_max
+        self.__collect_event_time()
+        ## Attributes to deal with adaptive time step
+        self.appended_time_flag = False
+        self.next_time_step = 0.0
+        self.force_next_tstep_flag = False
+
         # declare dictionaries to store Figure and axes objects to constructi real \
         # time figures (cdp, 10/2020)
         self.dict_Figure_animation = dict(T_max=dict(), mfr=dict())
