@@ -44,6 +44,7 @@ from utility_functions.auxiliary_functions import (
     check_object_number,
     set_diagnostic,
     interp_at_t_save,
+    load_auxiliary_files,
 )
 from utility_functions.electric_auxiliary_functions import (
     custom_current_function,
@@ -6521,3 +6522,39 @@ class Conductor:
                 # At least one difference l_event[1:] - l_event[:-1] is < 
                 # 10*dt: raise an error.
                 raise ValueError(f"Selected {dt_label} is to large for suitably discretize all the defined time ranges in file {f_path}.\n Please, reduce the {dt_label} such that each time range is discretized with at least 10 {dt_label}.")
+
+    def __collect_event_time_aux_input(
+        self,
+        obj_id:str,
+        simulation:object,
+        file_path:str
+        )->np.ndarray:
+        """Private method that collects the user defined times at which events (like heating and current variation) should occur as prescribed in auxiliary input files. This is useful to keep track of all the defined events. 
+        The method:
+            1. loads the auxiliary input file (with function load_auxiliary_files);
+            2. gets the content of the first row of the file, where the time are stored (adding t = 0.0 and t = t_end);
+            3. checks if the user select suitable value of time step/minimum time step invoking method self.__check_event_time_aux_input
+            4. concatenates the checked array to attribute self.events_time
+            5. returns the updated version of self.events_time
+
+        Args:
+            obj_id (str): identifier of the object, used to open the correct sheet of the auxiliary input file.
+            simulation (simulation): simulation object with all the info of the simulation.
+            file_path (str): path of the auxiliary input file from which event times are taken.
+
+        Returns:
+            np.ndarray: updated version of self.events_time to which array times is appended; in this way all the user defined event times are collected in attribute self.events_time.
+        """
+        
+        heat_df,_ = load_auxiliary_files(file_path,obj_id)
+        # Make sure to account for time t = 0.0 s
+        times = np.array([0])
+        # The first row of the dataframe stores the time points used in 
+        # the interpolation function starting from the second column.
+        times = np.append(times,heat_df.iloc[0,1:].to_numpy(dtype=float))
+        # Make sure to account for t = t_end
+        times = np.append(times, np.array([simulation.transient_input["TEND"]]))
+        # Remove duplicates.
+        times = np.unique(times)
+        self.__check_event_time_aux_input(times,simulation,file_path)
+        return np.append(self.events_time,times)
