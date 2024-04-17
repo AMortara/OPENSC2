@@ -6484,3 +6484,40 @@ class Conductor:
                     self.BASE_PATH, self.file_input["OPERATION"]
                 )
                 raise ValueError(f"Selected {dt_label} is to large for suitably discretize all the defined heating period in file {file_path}.\n Please, reduce the {dt_label} such that each difference TQEND - TQBEG is discretized with at least 10 {dt_label}.")
+
+    def __check_event_time_aux_input(
+        self,
+        l_event:np.ndarray,
+        simulation:object,
+        f_path:str,
+        ):
+        """Private method that checks if each difference between the time collected in variable l_event can be discretized with at least 10 time steps. If it is not the case, an error is raised. Those values come form the auxiliary input files for heating and/or current. The difference is evaluated as l_event[1:] - l_event[:-1].
+
+        Args:
+            l_event (np.ndarray): array containig values of the times used in auxiliary files to carry out interpolations.
+            simulation (simulation): simulation object with all the info of the simulation.
+            f_path (str): path of the auxiliary input file from which event times are taken.
+
+        Raises:
+            ValueError: if any of the difference l_event[1:] - l_event[:-1] in file conductor_operation.xlsx cannot be discretized with at least 10 time steps (if flag IADAPTIME = 0) or minimum time step (if flag IADAPTIME = 1 or IADAPTIME = 2).
+        """
+        
+        dt_switch = {
+            0: simulation.transient_input["TIME_STEP"],
+            1: simulation.transient_input["STPMIN"],
+            2: simulation.transient_input["STPMIN"],
+        }
+
+        dt = dt_switch[simulation.transient_input["IADAPTIME"]]
+        dt_label = DT_LABEL_SWITCH[simulation.transient_input["IADAPTIME"]]
+
+        if l_event.size > 0:
+            # Compute difference between each consecutive time value (event 
+            # time) in array l_event (loaded from auxiliary input file).
+            diff = l_event[1:] - l_event[:-1]
+            # Check that each difference is >= 10*dt. If it is not the case an 
+            # error is raised.
+            if any(diff < 1e1 * dt):
+                # At least one difference l_event[1:] - l_event[:-1] is < 
+                # 10*dt: raise an error.
+                raise ValueError(f"Selected {dt_label} is to large for suitably discretize all the defined time ranges in file {f_path}.\n Please, reduce the {dt_label} such that each time range is discretized with at least 10 {dt_label}.")
