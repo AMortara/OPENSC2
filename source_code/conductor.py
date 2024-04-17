@@ -35,6 +35,7 @@ from stack_component import StackComponent
 from strand_component import StrandComponent
 from strand_mixed_component import StrandMixedComponent
 from strand_stabilizer_component import StrandStabilizerComponent
+from simulation_global_info import DT_LABEL_SWITCH
 
 # import functions
 from utility_functions.auxiliary_functions import (
@@ -6462,14 +6463,8 @@ class Conductor:
             2: simulation.transient_input["STPMIN"],
         }
 
-        dt_label_switch = {
-            0: "time step",
-            1: "minimum time step",
-            2: "minimum time step",
-        }
-
         dt = dt_switch[simulation.transient_input["IADAPTIME"]]
-        dt_label = dt_label_switch[simulation.transient_input["IADAPTIME"]]
+        dt_label = DT_LABEL_SWITCH[simulation.transient_input["IADAPTIME"]]
 
         if l_event:
             # Convert l_event to a temporary numpy array.
