@@ -17,6 +17,7 @@ from environment import Environment
 from utility_functions.auxiliary_functions import (
     check_repeated_headings,
     check_object_number,
+    check_flag_value,
     with_read_csv,
     with_read_excel,
 )
@@ -39,6 +40,7 @@ from utility_functions.plots import (
     update_real_time_plots,
 )
 from simulation_global_info import MLT_DEFAULT_VALUE
+from utility_functions.utils_global_info import VALID_FLAG_VALUES
 
 class Simulation:
 
@@ -76,6 +78,16 @@ class Simulation:
             usecols=["Variable name", "Value"],
         )["Value"].to_dict()
         self.flag_start = False
+
+        # Check if user specified a valid value to flag IADAPTIME.
+        check_flag_value(
+            self.transient_input["IADAPTIME"],
+            VALID_FLAG_VALUES["IADAPTIME"],
+            "IADAPTIME",
+            self.starter_file_path,
+            "TRANSIENT",
+        )
+
         # get the order of maginitude of the minimum time step to make proper 
         # rounds to when saving data and figures of solution spatial 
         # distribution at default or User defined times.
