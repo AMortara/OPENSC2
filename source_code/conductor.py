@@ -6393,7 +6393,24 @@ class Conductor:
 
         Args:
             simulation (simulation): simulation object with all the info of the simulation.
+
+        Raises:
+            NotImplementedError: if obj.operations["IQFUN"] -> heating from user defined function.
+            NotImplementedError: if self.inputs["I0_OP_MODE"] -> current from user defined function.
         """
+
+        # Switch to select the correct path 
+        file_path_witch = dict(
+            heat_main = os.path.join(
+                self.BASE_PATH, self.file_input["OPERATION"]
+            ),
+            heat_aux = os.path.join(
+                self.BASE_PATH, self.file_input["EXTERNAL_HEAT"]
+            ),
+            current_aux = os.path.join(
+                self.BASE_PATH, self.file_input["EXTERNAL_CURRENT"]
+            ),
+        )
 
         keys = ("TQBEG","TQEND")
 
@@ -6405,21 +6422,64 @@ class Conductor:
             obj.operations[key] for key in keys for obj in self.inventory["SolidComponent"].collection if obj.operations["IQFUN"] == 1
         ]
 
+        # Get the path to input file conductor_operation.xlsx.
+        heat_main_path = file_path_witch["heat_main"]
         # Check if selected time step or minimum time step is too large to 
         # discretize each heating period in input file conductor_operation.xlsx.
-        self.__check_event_time_main_input(event_list,simulation)
+        self.__check_event_time_main_input(event_list,simulation,heat_main_path)
 
-        # To be done: deal with IQFUN -1 (-2), current and magnetic field from 
-        # user defined input file.
-        
-        if event_list:
-            self.events_time = np.array(event_list)
-        else:
+        # Convert list to np array
+        self.events_time = np.array(event_list)
+
+        # Loop on SolidComponent to deal with auxiliary input files (if any).
+        for obj in self.inventory["SolidComponent"].collection:
+            if obj.operations["IQFUN"] == -1:
+                # Get the event times stored in each sheet of auxiliary input 
+                # file for heating. The function check that user suitably 
+                # defined a time step/ minimum time step and appends the values 
+                # at the end of np array event_aux.
+                self.events_time = self.__collect_event_time_aux_input(
+                    obj.identifier,
+                    simulation,
+                    file_path_witch["heat_aux"],
+                )
+            elif obj.operations["IQFUN"] == -2:
+                raise NotImplementedError("A way to deal with flag IQFUN = -2 should still be implemented.")
+            if (
+                self.inputs["I0_OP_MODE"] == IOP_FROM_FILE
+                and obj.operations["IOP_MODE"] == -1
+                ):
+                # Get the event times stored in each sheet of auxiliary input 
+                # file for current. The function check that user suitably 
+                # defined a time step/minimum time step and appends the values 
+                # at the end of np array event_aux.
+                self.events_time = self.__collect_event_time_aux_input(
+                    obj.identifier,
+                    simulation,
+                    file_path_witch["current_aux"],
+                )
+            elif self.inputs["I0_OP_MODE"] == IOP_FROM_EXT_FUNCTION:
+                raise NotImplementedError("A way to deal with flag I0_OP_MODE = -2 should still be implemented.")
+
+        if self.events_time.size == 0:
             self.events_time = np.zeros(1)
         
         self.events_time = np.unique(self.events_time)
+        # Check if t = 0.0 s is included in array events_time.
+        if np.isclose(self.events_time[0],0.0):
+            # Remove t = 0.0 s from event_time since at this time only the 
+            # initialization is performed.
+            self.events_time = self.events_time[1:]
         self.i_event = 0
         self.i_event_max = len(self.events_time) - 1
+
+        ## Note on this method ##
+        # An alternative approach could be to 
+        #   1. collect all the event from main and auxiliary input files;
+        #   2. remove duplicates and sort them;
+        #   3. check that difference v[1:] - v[:-1] < 10 * dt
+        # Thsi approach is in general more restrictive than the one adopted at 
+        # the time being.
 
     def move_to_next_event(self):
         """Method that updates inplace the event index moving to the next event in the timeline.
