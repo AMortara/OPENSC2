@@ -6507,12 +6507,18 @@ class Conductor:
         self.appended_time_flag = True
 
 
-    def __check_event_time_main_input(self, l_event:list,simulation):
+    def __check_event_time_main_input(
+        self,
+        l_event:list,
+        simulation:object,
+        f_path:str,
+        ):
         """Private method that checks if each difference between the ending and the beginning of the heating defined in input file conductor_operation.xlsx can be discretized with at least 10 time steps. If it is not the case, an error is raised.
 
         Args:
             l_event (list): list containig values of TQBEG (in the first half) and of TQEND (in the second half).
             simulation (simulation): simulation object with all the info of the simulation.
+            f_path (str): path to main input file conductor_operation.xlsx from which event times are taken.
 
         Raises:
             ValueError: if any of the difference TQEND - TQBEG in file conductor_operation.xlsx cannot be discretized with at least 10 time steps (if flag IADAPTIME = 0) or minimum time step (if flag IADAPTIME = 1 or IADAPTIME = 2).
@@ -6541,10 +6547,7 @@ class Conductor:
             if any(diff < 1e1 * dt):
                 # At least one difference tqend - tqbeg is < 10*dt: raise an 
                 # error.
-                file_path = os.path.join(
-                    self.BASE_PATH, self.file_input["OPERATION"]
-                )
-                raise ValueError(f"Selected {dt_label} is to large for suitably discretize all the defined heating period in file {file_path}.\n Please, reduce the {dt_label} such that each difference TQEND - TQBEG is discretized with at least 10 {dt_label}.")
+                raise ValueError(f"Selected {dt_label} is to large for suitably discretize all the defined heating period in file {f_path}.\n Please, reduce the {dt_label} such that each difference TQEND - TQBEG is discretized with at least 10 {dt_label}.")
 
     def __check_event_time_aux_input(
         self,
