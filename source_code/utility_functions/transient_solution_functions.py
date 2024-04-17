@@ -3,10 +3,8 @@
 import numpy as np
 import os
 from scipy.linalg import solve_banded
-from utility_functions.auxiliary_functions import (
-    get_from_xlsx,
-    check_flag_value,
-)
+from utility_functions.auxiliary_functions import get_from_xlsx
+
 from typing import Union
 
 from conductor import Conductor
@@ -36,8 +34,6 @@ from utility_functions.step_matrix_construction import (
     build_known_therm_vector,
 )
 
-from utility_functions.utils_global_info import VALID_FLAG_VALUES
-
 def get_time_step(
     conductor:Conductor,
     transient_input:dict,
@@ -57,7 +53,7 @@ def get_time_step(
         fpath (str): path to the master input file, where user can set the value to flag IADAPTIME.
 
     Raises:
-        ValueError: if IADAPTIME = -1 since at the time being this option is not available (to be implemented in a later future).
+        NotImplementedError: if IADAPTIME = -1 since at the time being this option is not available (to be implemented in a later future).
 
     Returns:
         float: time step for the thermal-hydraulic loop to be used in the next iteration. The nex value of conductor.cond_time is evaluated as conductor.cond_time[-1] + time_step.
@@ -69,15 +65,6 @@ def get_time_step(
     t_end = transient_input["TEND"]
     # Previous time step
     prv_time_step = conductor.time_step
-    
-    # Check if user specified a valid value to flag IADAPTIME.
-    check_flag_value(
-        iadaptime,
-        VALID_FLAG_VALUES,
-        "IADAPTIME",
-        fpath,
-        "TRANSIENT",
-        )
 
     # Introduce to avoid division by zero in the evaluation of t_step_comp.
     tiny_value = 1e-10
@@ -162,7 +149,7 @@ def get_time_step(
         # user_adaptive_time_step (IADAPTIME = -2)
 
         if iadaptime == -1:
-            raise ValueError(f"Adaptive time step from user defined input file (IADAPTIME = -1) should still be implemented. Plese consider using another allowed value for flag IADAPTIME in sheet TRANSIENT of input file {fpath}.")
+            raise NotImplementedError(f"Adaptive time step from user defined input file (IADAPTIME = -1) should still be implemented. Plese consider using another allowed value for flag IADAPTIME in sheet TRANSIENT of input file {fpath}.")
         elif iadaptime == -2:
             return user_adaptive_time_step(
                 conductor,
