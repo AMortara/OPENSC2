@@ -747,13 +747,6 @@ def step(conductor, envionment, qsource, num_step):
     
     # Evaluate the norm of the solution change.
     conductor.dict_norm["Change"] = eval_sub_array_norm(CHG,conductor)
-    
-    # Compute the norm of the soluton variation
-    sol_var_norm = eval_sub_array_norm(sol_var,conductor)
-
-    # Evaluate the maximum value for each degree of freedom from the array with 
-    # the norm of the solution variation.
-    conductor.max_sol_var_norm = eval_sub_array_max(sol_var_norm,conductor)
 
     # Evaluate the eigenvalues of the solution.
     conductor.EQTEIG = eval_sub_array_max(EIG,conductor)
