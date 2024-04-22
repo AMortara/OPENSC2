@@ -695,91 +695,13 @@ class Simulation:
 
     # End method _make_directories.
 
-    def _space_convergence_paths(self, list_folder):
-        """Private method that builds the paths for the space convergence analysis invocking the private method _update_dict_path_and_make_dirs."""
-        # list_folder = ["output", "figures"]
-        str_dir = (
-            "TEND_"
-            + f"{self.transient_input['TEND']}_"
-            + "STPMIN_"
-            + f"{self.transient_input['STPMIN']}"
-        )
-        # Build list_key_val exploiting list comprehension. List of tuples: index [0] is the key of the dictionary, index [1] is the corresponding value that is the path to Output or Figures sub directories.
-        list_key_val = [
-            (
-                f"Space_conv_{folder}_dir",
-                os.path.join(
-                    self.dict_path["Sub_dir"],
-                    "Space_convergence",
-                    str_dir,
-                    folder.capitalize(),
-                ),
-            )
-            for folder in list_folder
-        ]
-        # Update the dictionary self.dict_path with keys and values from the dictionary comprehension.
-        self.dict_path.update(
-            {
-                list_key_val[ii][0]: list_key_val[ii][1]
-                for ii in range(len(list_key_val))
-            }
-        )
-        # Make the directories invoking method _make_directories.
-        self._make_directories(list_key_val, exist_ok=True)
-
-    # End method _space_convergence_paths.
-
-    def _time_convergence_paths(self, list_folder):
-        """Private method that builds the paths for the time convergence analysis invocking the private method _update_dict_path_and_make_dirs. The value of NELEMS is the one of the first defined conductor."""
-        # list_folder = ["output", "figures"]
-        str_dir = (
-            "TEND_"
-            + f"{self.transient_input['TEND']}_"
-            + "NELEMS_"
-            + f"{self.list_of_Conductors[0].grid_input['NELEMS']}"
-        )
-        # Build list_key_val exploiting list comprehension. List of tuples: index [0] is the key of the dictionary, index [1] is the corresponding value that is the path to Output or Figures sub directories.
-        list_key_val = [
-            (
-                f"Time_conv_{folder}_dir",
-                os.path.join(
-                    self.dict_path["Sub_dir"],
-                    "Time_convergence",
-                    str_dir,
-                    folder.capitalize(),
-                ),
-            )
-            for folder in list_folder
-        ]
-        # Update the dictionary self.dict_path with keys and values from the dictionary comprehension.
-        self.dict_path.update(
-            {
-                list_key_val[ii][0]: list_key_val[ii][1]
-                for ii in range(len(list_key_val))
-            }
-        )
-        # Make the directories invoking method _make_directories.
-        self._make_directories(list_key_val, exist_ok=True)
-
-        # Path of the directory to save the comparison of the time convergence \
-        # with the same method, comparison is by NELEMS (cdp, 11/2020) [seems to not be used, I do not remember the aim of this!! 08/07/2020]
-        # self.dict_path["Time_conv_comp_METHOD"] = os.path.join(\
-        # 																		self.dict_path["Main_dir"], "METHOD")
-        # Path of the directory to save the comparison of the time convergence \
-        # with the same NELEMS, comparison is by METHODS (cdp, 11/2020) [seems to not be used, I do not remember the aim of this!! 08/07/2020]
-        # self.dict_path["Time_conv_comp_NELEMS"] = os.path.join(\
-        # 																		self.dict_path["Main_dir"], "NELEMS")
-
-    # End method _time_convergence_paths.
-
-    def _subfolders_paths(self, list_folder, list_f_names, dict_make, dict_benchmark):
+    def _subfolders_paths(self, list_folder, list_f_names, dict_make):
         """[summary]
 
         Args:
             list_folder ([type]): [description]
             list_f_names ([type]): [description]
             dict_make ([type]): [description]
-            dict_benchmark ([type]): [description]
         """
         # Loop to create sub folders initialization, Spatial_distribution, Time_evolution and Benchmark in Output and Figures directories; each folder in f_names_list, will contain folder conductor.identifier.
         for f_name in list_f_names:
@@ -809,8 +731,6 @@ class Simulation:
                 dict_make[os.path.exists(self.dict_path[list_key_val[0][0]])](
                     list_key_val
                 )
-                # Create benchmark directory if f_name is "Spatial_distribution" or "Time_evolution"
-                dict_benchmark[f_name](conductor, list_folder, f_name)
             # End for conductor.
         # End for f_name.
 
@@ -829,44 +749,6 @@ class Simulation:
 
     # End method _make_warnings.
 
-    def _benchmark_paths(self, conductor, list_folder, f_name):
-        """[summary]
-
-        Args:
-            conductor ([type]): [description]
-            list_folder ([type]): [description]
-            f_name ([type]): [description]
-        """
-        # Build list_key_val exploiting list comprehension. List of tuples: index [0] is the key of the dictionary, index [1] is the corresponding value that is the path to Output or Figures sub directories.
-        list_key_val = [
-            (
-                f"{folder.capitalize()}_{f_name}_benchmark_{conductor.identifier}_dir",
-                os.path.join(
-                    self.dict_path["Sub_dir"],
-                    self.transient_input["SIMULATION"],
-                    folder.capitalize(),
-                    f_name,
-                    "Benchmark",
-                    conductor.identifier,
-                ),
-            )
-            for folder in list_folder
-        ]
-        # Update the dictionary self.dict_path with keys and values from dictionary comprehension.
-        self.dict_path.update(
-            {
-                list_key_val[ii][0]: list_key_val[ii][1]
-                for ii in range(len(list_key_val))
-            }
-        )
-        # Make the directories invoking method _make_directories.
-        self._make_directories(list_key_val, exist_ok=True)
-        # End method _benchmark_paths.
-
-    def _do_nothing(self, conductor, list_folder, f_name):
-        # Do nothing method, indroduced to use the dictionary dict_benchmark when creating folders.
-        pass
-
     def simulation_folders_manager(self):
         """[summary]"""
         # Define the dummy dictionary with the integration methods (da sistemare, non utilizzare i numeri come keys)
@@ -877,10 +759,6 @@ class Simulation:
             dict_int_method[self.list_of_Conductors[0].inputs["METHOD"]],
         )
         list_folder = ["output", "figures"]
-        # Create paths and folders with method _space_convergence_paths
-        self._space_convergence_paths(list_folder)
-        # Create paths and folders with method _time_convergence_paths
-        self._time_convergence_paths(list_folder)
         # Print a warning if os.path.exists() returns True, build the directories if returns False.
         dict_make = {True: self._make_warnings, False: self._make_directories}
         list_f_names = [
@@ -889,14 +767,8 @@ class Simulation:
             "Time_evolution",
             "Solution",
         ]
-        dict_benchmark = dict(
-            Initialization=self._do_nothing,
-            Spatial_distribution=self._benchmark_paths,
-            Time_evolution=self._benchmark_paths,
-            Solution=self._do_nothing,
-        )
         # Create subfolders path invocking method _subfolders_paths
-        self._subfolders_paths(list_folder, list_f_names, dict_make, dict_benchmark)
+        self._subfolders_paths(list_folder, list_f_names, dict_make)
 
         # Path to save the input files of the simulation in read olny mode as
         # metadata for the simulation itself.
