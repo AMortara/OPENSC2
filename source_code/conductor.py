@@ -444,8 +444,7 @@ class Conductor:
 
         Args:
             self (Self): conductor object."""
-        
-        self.__check_coupling_sheet_names()
+
         self.__check_thermal_contact_resistance_values()
         # Add call to methods that perform cheks on file
         # conductor_coupling.xlsx below.
