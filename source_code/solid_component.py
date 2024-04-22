@@ -656,128 +656,213 @@ class SolidComponent:
     def initialize_electric_quantities(self, conductor):
         """Method that initializes to zero some arrays that are an outcome of the electric method for each SolidComponent object:
 
-        * self.dict_Gauss_pt["current_along"];
-        * self.dict_Gauss_pt["delta_voltage_along"];
-        * self.dict_Gauss_pt["delta_voltage_along_sum"];
-        * self.dict_node_pt["total_power_el_cond"].
+        * self.dict_Gauss_pt["current_along"]
+        * self.dict_Gauss_pt["delta_voltage_along"]
+        * self.dict_Gauss_pt["delta_voltage_along_sum"]
+        * self.dict_Gauss_pt["integral_power_el_res"]
+        * self.dict_Gauss_pt["linear_power_el_resistance"]
+        * self.dict_node_pt["total_linear_power_el_cond"]
+        * self.dict_node_pt["total_power_el_cond"]
+        * self.dict_node_pt["integral_power_el_cond"]
         """
 
-        self.dict_Gauss_pt["current_along"] = np.zeros(conductor.grid_input["NELEMS"])
-        self.dict_Gauss_pt["delta_voltage_along"] = np.zeros(
-            conductor.grid_input["NELEMS"]
-        )
-        self.dict_Gauss_pt["delta_voltage_along_sum"] = np.zeros(
-            conductor.grid_input["NELEMS"]
-        )
-        self.dict_node_pt["total_power_el_cond"] = np.zeros(
-            conductor.grid_features["N_nod"]
-        )
+        # Aliases
+        n_nod = conductor.grid_features["N_nod"]
+        n_elem = conductor.grid_input["NELEMS"]
+        method = conductor.inputs["METHOD"]
+
+        self.dict_Gauss_pt["current_along"] = np.zeros(n_elem)
+        self.dict_Gauss_pt["delta_voltage_along"] = np.zeros(n_elem)
+        self.dict_Gauss_pt["delta_voltage_along_sum"] = np.zeros(n_elem)
+
+        # Introduced to evaluate the integral value Joule power due to electric 
+        # resistance along the cable in the electric module as Delta V * I.
+        self.dict_Gauss_pt["integral_power_el_res"] = np.zeros(n_elem)
+
+        self.dict_node_pt["total_power_el_cond"] = np.zeros(n_nod)
+        # Introduced to evaluate the integral value Joule power due to electric 
+        # conductance across the cable in the electric module.
+        self.dict_node_pt["integral_power_el_cond"] = np.zeros(n_nod)
+
+        if method == "BE" or method == "CN":
+            # Backward Euler or Crank-Nicolson.
+            self.dict_node_pt["total_linear_power_el_cond"] = np.zeros(
+                (n_nod,2)
+            )
+            self.dict_Gauss_pt["linear_power_el_resistance"] = np.zeros(
+                    (n_elem,2)
+                )
+        elif method == "AM4":
+            # Adams-Moulton 4.
+            self.dict_node_pt["total_linear_power_el_cond"] = np.zeros(
+                (n_nod,4)
+            )
+            self.dict_Gauss_pt["linear_power_el_resistance"] = np.zeros(
+                    (n_elem,4)
+                )
+
+    def set_power_array_to_zeros(self, conductor):
+        """Method that sets to zeros arrays used in the evaluation of the Joule power afther the initialization carried out with method initialize_electric_quantities.
+
+        Args:
+            conductor (Conductor): object with all the information useful for the computation.
+        """
+
+        # Aliases
+        n_nod = conductor.grid_features["N_nod"]
+        n_elem = conductor.grid_input["NELEMS"]
+
+        # Set the following arrays to zeros
+        self.dict_Gauss_pt["integral_power_el_res"] = np.zeros(n_elem)
+        self.dict_node_pt["integral_power_el_cond"] = np.zeros(n_nod)
 
     def get_joule_power_along(self, conductor: object):
-        """Method that evaluate the contribution to the total power in the element of Joule power (in W/m) due to the electic resistances along the SolidComponent objects.
+        """Method that evaluate the contribution to the integral power in the element of Joule power (in W/m) due to the voltage difference (due to electric resistance and inductance) along the SolidComponent objects. This approach was discussed with prof. Zach Hartwig and Dr. Nicolò Riva and is more general and coservative that the evaluation that takes into account only the contribution of the electric resistance.
+        This method should be called in the electric method, when the transient solution is used and only for current carriers.
 
         Args:
             conductor (object): ConductorComponent object with all informations to make the calculation.
         """
 
-        if conductor.inputs["METHOD"] == "BE" or conductor.inputs["METHOD"] == "CN":
-            # Backward Euler or Crank-Nicolson.
-            if conductor.cond_time[-1] == 0:
-                # Initialization.
-                self.dict_Gauss_pt["linear_power_el_resistance"] = np.zeros(
-                    (conductor.grid_input["NELEMS"], 2)
-                )
-            elif conductor.cond_time[-1] > 0 and conductor.inputs["I0_OP_MODE"] != None:
-                if conductor.cond_num_step == 1:
-                    # Store the old values only immediately after the
-                    # initializzation, since after that the whole SYSLOD array
-                    # is saved and there is no need to compute twice the same
-                    # values.
-                    self.dict_Gauss_pt["linear_power_el_resistance"][
-                        :, 1
-                    ] = self.dict_Gauss_pt["linear_power_el_resistance"][:, 0].copy()
-                if self.name != "Z_JACKET":
-                    # Evaluate Joule linear power along the strand in W/m, due
-                    # to electric resistances only for current carriers:
-                    # P_along = R_along * I_along ^2 / (Delta_z * costheta)
-                    self.dict_Gauss_pt["linear_power_el_resistance"][:, 0] = (
-                        self.dict_Gauss_pt["current_along"] ** 2
-                        * self.dict_Gauss_pt["electric_resistance"]
-                        / (conductor.grid_features["delta_z"] * self.inputs["COSTETA"])
-                    )
-        elif conductor.inputs["METHOD"] == "AM4":
-            # Adams-Moulton 4.
-            if conductor.cond_time[-1] == 0:
-                # Initialization.
-                self.dict_Gauss_pt["linear_power_el_resistance"] = np.zeros(
-                    (conductor.grid_features["N_nod"], 4)
-                )
-            elif conductor.cond_time[-1] > 0 and conductor.inputs["I0_OP_MODE"] != None:
+        # Alias
+        method = conductor.inputs["METHOD"]
+
+        # Finalize the evaluation of the integral value of the Joule power due 
+        # to electric resistance along the current carrier started in method 
+        # conductor.eval_integral_joule_power. Array integral_power_el_res 
+        # stores the numerator (energy in J) that here is divided by the 
+        # thermal hydraulic to get again a power (W), which is further divided 
+        # by the length of the discreticazion element corrected by cos(theta) 
+        # to get a linear power density (W/m):
+        # P_Joule = sum_1^N_em P_{Joule,i} / (Delta_t_TH * Delta_z * costheta)
+        integral_j_pow_along = (
+            self.dict_Gauss_pt["integral_power_el_res"]
+            / (conductor.grid_features["delta_z"] * self.inputs["COSTETA"]
+            * conductor.time_step)
+        )
+
+        if method == "BE" or method == "CN":
+            if conductor.cond_num_step == 1:
+                # Store the old values only immediately after the
+                # initializzation, since after that the whole SYSLOD array
+                # is saved and there is no need to compute twice the same
+                # values.
                 self.dict_Gauss_pt["linear_power_el_resistance"][
-                    :, 1:4
-                ] = self.dict_Gauss_pt["linear_power_el_resistance"][:, 0:3].copy()
-                if self.name != "Z_JACKET":
-                    # Evaluate Joule linear power along the strand in W/m, due
-                    # to electric resistances only for current carriers:
-                    # P_along = R_along * I_along ^2 / (Delta_z * costheta)
-                    self.dict_Gauss_pt["linear_power_el_resistance"][:, 0] = (
-                        self.dict_Gauss_pt["current_along"] ** 2
-                        * self.dict_Gauss_pt["electric_resistance"]
-                        / (conductor.grid_features["delta_z"] * self.inputs["COSTETA"])
-                    )
+                    :,1
+                ] = self.dict_Gauss_pt["linear_power_el_resistance"][
+                        :,0
+                    ].copy()
+
+            # Assign the integral value of the linear power density of the 
+            # Joule power along current carrier.
+            self.dict_Gauss_pt["linear_power_el_resistance"][:, 0] = (
+                integral_j_pow_along
+            )
+        elif method == "AM4":
+            # Adams-Moulton 4.
+            self.dict_Gauss_pt["linear_power_el_resistance"][
+                :, 1:4
+            ] = self.dict_Gauss_pt["linear_power_el_resistance"][:, 0:3].copy()
+            # Assign the integral value of the linear power density of the 
+            # Joule power along current carrier.
+            self.dict_Gauss_pt["linear_power_el_resistance"][:, 0] = (
+                integral_j_pow_along
+            )
 
     def get_joule_power_across(self, conductor: object):
         """Method that evaluates the contribution to the total power in the nodes of Joule power (in W/m) due to the electic conductance across the SolidComponent objects.
+        This method should be called in the electric method, when the transient solution is used and only for current carriers.
 
         Args:
             conductor (object): ConductorComponent object with all informations to make the calculation.
         """
 
-        if conductor.inputs["METHOD"] == "BE" or conductor.inputs["METHOD"] == "CN":
+        # Alias
+        method = conductor.inputs["METHOD"]
+
+        # Finalize the evaluation of the integral value of the Joule power due 
+        # to electric conductance between the current carrier started in method 
+        # conductor.eval_integral_joule_power. Array integral_power_el_cond 
+        # stores the numerator (energy in J) that here is divided by the 
+        # thermal hydraulic to get again a power (W), which is further divided 
+        # by a suitable length to get a linear power density (W/m):
+        # P_Joule = sum_1^N_em P_{Joule,i} / (Delta_t_TH * Delta_z_tilde)
+        integral_j_pow_across = (
+            self.dict_node_pt["integral_power_el_cond"]
+            / (conductor.grid_features["delta_z_tilde"] * conductor.time_step)
+        )
+
+        if method == "BE" or method == "CN":
             # Backward Euler or Crank-Nicolson.
-            if conductor.cond_time[-1] == 0:
-                # Initialization.
-                self.dict_node_pt["total_linear_power_el_cond"] = np.zeros(
-                    (conductor.grid_features["N_nod"], 2)
-                )
-            elif conductor.cond_time[-1] > 0:
-                if conductor.cond_num_step == 1:
-                    # Store the old values only immediately after the
-                    # initializzation, since after that the whole SYSLOD array
-                    # is saved and there is no need to compute twice the same
-                    # values.
-                    self.dict_node_pt["total_linear_power_el_cond"][
-                        :, 1
-                    ] = self.dict_node_pt["total_linear_power_el_cond"][:, 0].copy()
-                if self.name != "Z_JACKET":
-                    # Evaluate total Joule linear power across the strand in
-                    # W/m, due to electric conductance only for current
-                    # carriers:
-                    # P_l_t = P_t / Delta_z_tilde
-                    self.dict_node_pt["total_linear_power_el_cond"][:, 0] = (
-                        self.dict_node_pt["total_power_el_cond"]
-                        / conductor.grid_features["delta_z_tilde"]
-                    )
-        elif conductor.inputs["METHOD"] == "AM4":
-            # Adams-Moulton 4.
-            if conductor.cond_time[-1] == 0:
-                # Initialization.
-                self.dict_node_pt["total_linear_power_el_cond"] = np.zeros(
-                    (conductor.grid_features["N_nod"], 4)
-                )
-            elif conductor.cond_time[-1] > 0:
+            if conductor.cond_num_step == 1:
+                # Store the old values only immediately after the
+                # initializzation, since after that the whole SYSLOD array
+                # is saved and there is no need to compute twice the same
+                # values.
                 self.dict_node_pt["total_linear_power_el_cond"][
-                    :, 1:4
-                ] = self.dict_node_pt["total_linear_power_el_cond"][:, 0:3].copy()
-                if self.name != "Z_JACKET":
-                    # Evaluate total Joule linear power across the strand in
-                    # W/m, due to electric conductance only for current
-                    # carriers:
-                    # P_l_t = P_t / Delta_z_tilde
-                    self.dict_node_pt["total_linear_power_el_cond"][:, 0] = (
-                        self.dict_node_pt["total_power_el_cond"]
-                        / conductor.grid_features["delta_z_tilde"]
-                    )
+                    :, 1
+                ] = self.dict_node_pt["total_linear_power_el_cond"][:, 0].copy()
+            # Assign the integral value of the linear power density of the 
+            # Joule power across current carrier.
+            self.dict_node_pt["total_linear_power_el_cond"][:, 0] = (
+                integral_j_pow_across
+            )
+        elif method == "AM4":
+            # Adams-Moulton 4.
+            self.dict_node_pt["total_linear_power_el_cond"][
+                :, 1:4
+            ] = self.dict_node_pt["total_linear_power_el_cond"][:, 0:3].copy()
+            # Assign the integral value of the linear power density of the 
+            # Joule power across current carrier.
+            self.dict_node_pt["total_linear_power_el_cond"][:, 0] = (
+                integral_j_pow_across
+            )
+
+    def get_joule_power_along_steady(self, conductor: object):
+        """Method that evaluate the contribution to the total power in the element of Joule power (in W/m) due to the voltage difference (due to electric resistance and inductance) along the SolidComponent objects.
+        This approach was discussed with prof. Zach Hartwig and Dr. Nicolò Riva and is more general and coservative that the evaluation that takes into account only the contribution of the electric resistance.
+        This method should be called in the electric method, when the transient solution is used and for the solid component that actually carries a current. It works when the steady state solution for the electric module is computed.
+
+        Args:
+            conductor (object): ConductorComponent object with all informations to make the calculation.
+        """
+
+        # Alias
+        current = self.dict_Gauss_pt["current_along"]
+        voltage = self.dict_Gauss_pt["delta_voltage_along"]
+        d_z_tilde = conductor.grid_features["delta_z"] * self.inputs["COSTETA"]
+
+        # Evaluate Joule linear power along the strand in W, due
+        # to electric resistances only for current carriers:
+        # P_along = Delta_Phi_along * I_along
+        # N.B. this evaluation accounts aslo for the voltage due to the 
+        # inductance and is a conservative an more general approach. Discussed 
+        # with prof. Zach Hartwig and Dr. Nicolò Riva.
+        self.dict_Gauss_pt["integral_power_el_res"] = voltage * current
+
+        # Convert W in W/m keping into account the cos(theta).
+        # This is independent of the time integration method since at the 
+        # initialization (when this function is used) BE, CN and AM4 should 
+        # fill only the 0 index column.
+        self.dict_Gauss_pt["linear_power_el_resistance"][:, 0] = (
+            self.dict_Gauss_pt["integral_power_el_res"] / d_z_tilde
+        )
+
+    def get_joule_power_across_steady(self, conductor: object):
+        """Method that evaluates the contribution to the total power in the nodes of Joule power (in W/m) due to the electic conductance across the SolidComponent objects.
+        This method should be called in the electric method, when the transient solution is used. It works when the steady state solution for the electric module is computed.
+
+        Args:
+            conductor (object): ConductorComponent object with all informations to make the calculation.
+        """
+
+        # Evaluate total Joule linear power across the strand in W/m, due to 
+        # electric conductance only for current carriers:
+        # P_l_t = P_t / Delta_z_tilde
+        self.dict_node_pt["total_linear_power_el_cond"][:, 0] = (
+            self.dict_node_pt["total_power_el_cond"]
+            / conductor.grid_features["delta_z_tilde"]
+        )
 
     def set_energy_counters(self, conductor):
         # tesded: ok (cdp, 06/2020)

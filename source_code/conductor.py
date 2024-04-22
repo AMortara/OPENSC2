@@ -14,6 +14,7 @@ import warnings
 # import classes
 from component_collection import ComponentCollection
 from conductor_flags import (
+    CONSTANT_INDUCTANCE,
     ANALYTICAL_INDUCTANCE,
     APPROXIMATE_INDUCTANCE,
     ELECTRIC_CONDUCTANCE_UNIT_LENGTH,
@@ -22,6 +23,7 @@ from conductor_flags import (
     IOP_CONSTANT,
     IOP_FROM_EXT_FUNCTION,
     IOP_FROM_FILE,
+    SELF_INDUCTANCE_MODE_0,
     SELF_INDUCTANCE_MODE_1,
     SELF_INDUCTANCE_MODE_2,
     STATIC_ELECTRIC_SOLVER,
@@ -185,7 +187,7 @@ class Conductor:
             "INDUCTANCE_MODE",
             "ELECTRIC_SOLVER",
         ]
-        self.operations.update({key: 1 for key in keys if self.operations[key]})
+        self.operations.update({key: 1 for key in keys if self.operations[key]==True})
         self.operations.update(
             {key: 0 for key in keys if self.operations[key] == False}
         )
@@ -2953,9 +2955,9 @@ class Conductor:
         for obj in self.inventory["SolidComponent"].collection:
             obj.initialize_electric_quantities(self)
 
-        # Initialize to zeros all quantities related to heat source in nodal 
-        # points.
-        self.__build_heat_source_nodal_pt(simulation)
+        # Initialize to zeros all quantities related to thermal hydraulic heat 
+        # source (i.e. not joule power due to electric moduel) in nodal points.
+        self.__initialize_heat_source_nodal_pt_th(simulation)
 
         # ENERGY BALANCE FLUID COMPONENTS
         for fluid_comp in self.inventory["FluidComponent"].collection:
@@ -3836,6 +3838,62 @@ class Conductor:
             self.total_elements_current_carriers :
         ] = self.dict_node_pt["op_current"]
 
+    # CONSTANT INDUCTANCE
+    def __constant_inductance(self, mode: int):
+        """Private method that assigns a constant value to the mutual inductance as defined by the user in sheet CONDUCTOR_operation of the input file conductor_definition.xlsx
+
+        Args:
+            mode (int): flag to select the equation for the analytical evaluation of self inductance. 0:constan value from sheet CONDUCTOR_operation of the input file conductor_definition.xlsx; 1: from method __self_inductance_mode1; 2: from method __self_inductance_mode2.
+        """
+
+        lmod = (
+            (
+                (
+                    self.nodal_coordinates.iloc[
+                        self.connectivity_matrix.loc[
+                            "StrandComponent",
+                            "end",
+                        ],
+                        :,
+                    ]
+                    - self.nodal_coordinates.iloc[
+                        self.connectivity_matrix.loc[
+                            "StrandComponent",
+                            "start",
+                        ],
+                        :,
+                    ]
+                )
+                ** 2
+            )
+            .sum(axis=1)
+            .apply(np.sqrt)
+        )
+        mutual_inductance = self.operations["MUTUAL_INDUCTANCE"] * np.ones(self.inductance_matrix.shape) 
+       
+       # The principal diagonal is set to 0
+        for ii in range(mutual_inductance.shape[0]):
+           mutual_inductance[ii, ii] = 0
+      
+        self_inductance_switch = {
+            SELF_INDUCTANCE_MODE_0: self.__constant_self_inductance_evaluation,
+            SELF_INDUCTANCE_MODE_1: self.__self_inductance_mode1,
+            SELF_INDUCTANCE_MODE_2: self.__self_inductance_mode2,
+        }
+        self_inductance = self_inductance_switch[mode](lmod)
+
+        # Evaluate internal inductance
+        internal_inductance = lmod.to_numpy() / 2.0
+
+        self.inductance_matrix = (
+            constants.mu_0
+            / (4.0 * constants.pi)
+            * (
+                np.diag(self_inductance + internal_inductance)
+                + mutual_inductance
+                + mutual_inductance.T
+            )
+        )
     # START: INDUCTANCE ANALYTICAL EVALUATION
 
     def __inductance_analytical_calculation(self, mode: int = 2):
@@ -3845,9 +3903,9 @@ class Conductor:
             mode (int,optional): flag to select the equation for the analytical evaluation of self inductance. 1: mode 1; 2: mode 2. Defaults to 2.
         """
 
-        if mode != 1 and mode != 2:
+        if mode!= SELF_INDUCTANCE_MODE_0 and mode != SELF_INDUCTANCE_MODE_1 and mode != SELF_INDUCTANCE_MODE_2:
             raise ValueError(
-                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
             )
         ABSTOL = 1e-6
         lmod = (
@@ -3891,6 +3949,7 @@ class Conductor:
 
         # Switch to evalutae self inductance.
         self_inductance_switch = {
+            SELF_INDUCTANCE_MODE_0: self.__constant_self_inductance_evaluation,
             SELF_INDUCTANCE_MODE_1: self.__self_inductance_mode1,
             SELF_INDUCTANCE_MODE_2: self.__self_inductance_mode2,
         }
@@ -4055,6 +4114,21 @@ class Conductor:
             .apply(np.sqrt)
         )
 
+    #  CONSTANT SELF INDUCTANCE 
+    def __constant_self_inductance_evaluation(self, lmod: np.array) -> np.ndarray:
+        """Private method that assigns a constant value to the self inductance that is defined by the user in sheet CONDICTOR_operation in the input file conductor_definition.xlsx
+
+        Args:
+            lmod (np.ndarray): array with the distance between strand component nodal nodes.
+
+        Returns:
+            np.ndarray: self inductances.
+        """
+        
+        self_inductance = np.ones(lmod.shape) * self.operations["SELF_INDUCTANCE"]
+
+        return self_inductance
+
     def __self_inductance_mode1(self, lmod: np.ndarray) -> np.ndarray:
         """Private method that analytically evaluates self inductances according to mode 1.
 
@@ -4068,23 +4142,23 @@ class Conductor:
 
         for ii, obj in enumerate(self.inventory["StrandComponent"].collection):
             self_inductance[ii :: self.inventory["StrandComponent"].number] = (
-                2
-                * lmod[ii :: self.inventory["StrandComponent"].number]
-                * (
-                    np.arcsinh(
-                        lmod[ii :: self.inventory["StrandComponent"].number]
-                        / obj.radius
-                    )
-                    - np.sqrt(
-                        1.0
-                        + (
-                            obj.radius
-                            / lmod[ii :: self.inventory["StrandComponent"].number]
-                        )
-                        ** 2
-                    )
-                    + obj.radius / lmod[ii :: self.inventory["StrandComponent"].number]
-                )
+               2
+               * lmod[ii :: self.inventory["StrandComponent"].number]
+               * (
+                   np.arcsinh(
+                       lmod[ii :: self.inventory["StrandComponent"].number]
+                       / obj.radius
+                   )
+                   - np.sqrt(
+                       1.0
+                       + (
+                           obj.radius
+                           / lmod[ii :: self.inventory["StrandComponent"].number]
+                       )
+                       ** 2
+                   )
+                   + obj.radius / lmod[ii :: self.inventory["StrandComponent"].number]
+               )
             )
         return self_inductance
 
@@ -4100,25 +4174,26 @@ class Conductor:
 
         for ii, obj in enumerate(self.inventory["StrandComponent"].collection):
 
-            self_inductance[ii :: self.inventory["StrandComponent"].number] = 2 * (
-                lmod[ii :: self.inventory["StrandComponent"].number]
-                * np.log(
-                    (
-                        lmod[ii :: self.inventory["StrandComponent"].number]
-                        + np.sqrt(
-                            lmod[ii :: self.inventory["StrandComponent"].number] ** 2
-                            + obj.radius ** 2
-                        )
-                    )
-                    / obj.radius
-                )
-                - np.sqrt(
-                    lmod[ii :: self.inventory["StrandComponent"].number] ** 2
-                    + obj.radius ** 2
-                )
-                + lmod[ii :: self.inventory["StrandComponent"].number] / 4
-                + obj.radius
-            )
+            self_inductance[ii :: self.inventory["StrandComponent"].number] = (
+           2 * (
+               lmod[ii :: self.inventory["StrandComponent"].number]
+               * np.log(
+                   (
+                       lmod[ii :: self.inventory["StrandComponent"].number]
+                       + np.sqrt(
+                           lmod[ii :: self.inventory["StrandComponent"].number] ** 2
+                           + obj.radius ** 2
+                       )
+                   )
+                   / obj.radius
+               )
+               - np.sqrt(
+                   lmod[ii :: self.inventory["StrandComponent"].number] ** 2
+                   + obj.radius ** 2
+               )
+               + lmod[ii :: self.inventory["StrandComponent"].number] / 4
+               + obj.radius
+            ))
 
         return self_inductance
 
@@ -4126,8 +4201,13 @@ class Conductor:
 
     # START: INDUCTANCE APPROXIMATE EVALUATION
 
-    def __inductance_approximate_calculation(self):
+    def __inductance_approximate_calculation(self, mode : int = 2):
         """Private method that approximate the inductance of the system. For an analytical evaluation of the inductance use private method __inductance_analytical_calculation."""
+        
+        if mode!= SELF_INDUCTANCE_MODE_0 and mode != SELF_INDUCTANCE_MODE_1 and mode != SELF_INDUCTANCE_MODE_2:
+            raise ValueError(
+                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+            )
 
         ll = (
             self.nodal_coordinates.iloc[
@@ -4161,8 +4241,13 @@ class Conductor:
                 ll, mutual_inductance
             )
 
-        # Evaluate self inductance
-        self_inductance = self.__self_inductance_approximate(lmod)
+        self_inductance_switch = {
+            SELF_INDUCTANCE_MODE_0: self.__constant_self_inductance_evaluation,
+            SELF_INDUCTANCE_MODE_1: self.__self_inductance_mode1,
+            SELF_INDUCTANCE_MODE_2: self.__self_inductance_mode2,
+        }
+        self_inductance = self_inductance_switch[mode](lmod)
+
         # Evaluate internal inductance
         internal_inductance = lmod.to_numpy() / 2.0
 
@@ -4287,19 +4372,21 @@ class Conductor:
         """
 
         if (
-            self.operations["INDUCTANCE_MODE"] != 0
-            and self.operations["INDUCTANCE_MODE"] != 1
+            self.operations["INDUCTANCE_MODE"] != CONSTANT_INDUCTANCE
+            and self.operations["INDUCTANCE_MODE"] != ANALYTICAL_INDUCTANCE
+            and self.operations["INDUCTANCE_MODE"] != APPROXIMATE_INDUCTANCE
         ):
             raise ValueError(
-                f"{self.identifier = }\nArgument self.operations['INDUCTANCE_MODE'] should be equal to {APPROXIMATE_INDUCTANCE = } or {ANALYTICAL_INDUCTANCE = }. Current value ({self.operations['INDUCTANCE_MODE'] = }) is not allowed. Please check {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+                f"{self.identifier = }\nArgument self.operations['INDUCTANCE_MODE'] should be equal to {CONSTANT_INDUCTANCE = } or {APPROXIMATE_INDUCTANCE = } or {ANALYTICAL_INDUCTANCE = }. Current value ({self.operations['INDUCTANCE_MODE'] = }) is not allowed. Please check {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
             )
 
         inductance_switch = {
+            CONSTANT_INDUCTANCE: self.__constant_inductance,
             ANALYTICAL_INDUCTANCE: self.__inductance_analytical_calculation,
             APPROXIMATE_INDUCTANCE: self.__inductance_approximate_calculation,
         }
 
-        inductance_switch[self.operations["INDUCTANCE_MODE"]]()
+        inductance_switch[self.operations["INDUCTANCE_MODE"]](self.operations["SELF_INDUCTANCE_MODE"])
 
         self.electric_mass_matrix[
             : self.total_elements_current_carriers,
@@ -4357,8 +4444,8 @@ class Conductor:
 
         self.electric_right_hand_side = self.electric_right_hand_side[idx] - bar
 
-    def __electric_solution_reorganization(self):
-        """Private method that reorganizes the electric solution. Specifically it:
+    def electric_solution_reorganization(self):
+        """Method that reorganizes the electric solution. Specifically it:
         * extracts edge current (current along StrandComponent) and nodal potentials from electric solution array;
         * computes voltage difference along StrandComponent;
         * assignes current along StrandComponent and voltage difference along StrandComponent.
@@ -4392,8 +4479,8 @@ class Conductor:
                 * obj.dict_Gauss_pt["electric_resistance"]
                     )
 
-    def __get_total_joule_power_electric_conductance(self):
-        """Private method that evaluates total Joule power in each node of the spatial discretization associated to the electric conductance between StrandComponent objects. The method re-distribues computed values to each defined StrandComponent object."""
+    def get_total_joule_power_electric_conductance(self):
+        """Method that evaluates total Joule power in each node of the spatial discretization associated to the electric conductance between StrandComponent objects. The method re-distribues computed values to each defined StrandComponent object."""
 
         # Loop to initialize total_powe_el_cond to 0 for each StrandComponent.
         for ii, obj in enumerate(self.inventory["StrandComponent"].collection):
@@ -4486,32 +4573,70 @@ class Conductor:
                     idxp = ind_zcoord_gauss[ii]
                     obj.dict_Gauss_pt["delta_voltage_along_sum"][idxp] = obj.dict_Gauss_pt["delta_voltage_along"][idx:idxp+1].sum()
 
+    def __electric_method_steady(self):
+        """Private method that allows to define the electric problem and solve it with the steady state solver, calculating the Joule power in a consistent way to be used as heat source for the next iterations (carried out with the transient solver).
+        """
+        
+        # Define and solve the electric problem with the steady state solver.
+        electric_steady_state_solution(self)
+
+        # Call method electric_solution_reorganization: reorganize electric
+        # solution and computes useful quantities used in the Joule power
+        # evaluation.
+        self.electric_solution_reorganization()
+        # Call method get_total_joule_power_electric_conductance to evaluate
+        # the total Joule power in each node of the spatial discretization
+        # associated to the electric conductance between StrandComponent
+        # objects.
+        self.get_total_joule_power_electric_conductance()
+
+        # Compute the Joule power contributions (along and across) 
+        # exploiting the outcome from the steady state solution of the 
+        # elecric module.
+        self.__get_heat_source_em_steady()
+
+        # At this point all the heat source therm should be evaluated and 
+        # the arrays used in function step could be constructed. Namely:
+        # 1) all the thermal hydraulic heat source are computed in calling 
+        # method self.__initialize_heat_source_nodal_pt_th in self.
+        # initialization before entering this branch (in method simulation.
+        # conductor_initialization);
+        # 2) all the Joule power contribution due to the electric solution 
+        # are evaluated calling method self.__get_heat_source_em_steady.
+        # N.B. arrays obj.dict_Gauss_pt["integral_power_el_res"] and 
+        # obj.dict_node_pt["integral_power_el_cond"] are set to zero for 
+        # the next evaluation inside method __build_heat_source_gauss_pt
+        self.__build_heat_source_gauss_pt()
+
     def electric_method(self):
-        """Method that performs electric solution according to flag self.operations["ELECTRIC_SOLVER"]. Calls private method self.__electric_solution_reorganization to reorganize the electric solution.
+        """Method that performs electric solution according to flag self.operations["ELECTRIC_SOLVER"]. Calls method self.electric_solution_reorganization to reorganize the electric solution.
 
         Raises:
             ValueError: if to flag self.operations["ELECTRIC_SOLVER"] user assigns not valid value.
         """
 
         if self.cond_num_step == 0:
-            electric_steady_state_solution(self)
+            # Define the electric problem, solve it with the steady state 
+            # solver and copute the Joule power consistently.
+            self.__electric_method_steady()
+
         else:
             self.__get_electric_time_step()
             # Always solve the electromagnetic problem as a transient problem. 
             # This is not general but edge cases are few and mostly "theoretic".
             electric_transient_solution(self)
         
-        # Call method __electric_solution_reorganization: reorganize electric
+        # Call method electric_solution_reorganization: reorganize electric
         # solution and computes useful quantities used in the Joule power
         # evaluation.
-        self.__electric_solution_reorganization()
+        self.electric_solution_reorganization()
 
         self.__compute_voltage_sum()
-        # Call method __get_total_joule_power_electric_conductance to evaluate
+        # Call method get_total_joule_power_electric_conductance to evaluate
         # the total Joule power in each node of the spatial discretization
         # associated to the electric conductance between StrandComponent
         # objects.
-        self.__get_total_joule_power_electric_conductance()
+        self.get_total_joule_power_electric_conductance()
 
     def __update_grid_features(self):
         """Private method that updates dictionary grid_features evaluating arrays delta_z, delta_z_tilde and zcoord_gauss as keys of dictionary self.grid_features. These arrays are used:
@@ -4568,6 +4693,80 @@ class Conductor:
             # Deal with cases specified in https://stackoverflow.com/questions/8101353/counting-significant-figures-in-python
             self.n_digit_z = len(Decimal(numstr).as_tuple().digits)
     
+    def __initialize_heat_source_nodal_pt_th(self, simulation):
+        """Private method that initializes heat source arrays in nodal points for strand and jacket objects keeping into account of the contribution strictly related to the thermal hydraulic model. The Joule power due to the electric module is evaluated in a different method. This method is called only once at conductor initialization and it is introduced in order to limit the number of times the check on time or number of step is carried out to select the suitable operation.
+
+        Args:
+            simulation (object): object with all information about the simulation.
+        """
+        
+        # Alias
+        interf_flag = self.dict_df_coupling["contact_perimeter_flag"]
+
+        # Loop on StrandComponent objects.
+        for strand in self.inventory["StrandComponent"].collection:
+            strand.get_heat(self)
+            # Call method jhtflx_new_0 to initialize JHTFLX to zeros for each 
+            # conductor solid components.
+            strand.jhtflx_new_0(self)
+            # Call set_energy_counters to initialize EEXT and EJHT to zeros for 
+            # each conductor solid components.
+            strand.set_energy_counters(self)
+
+        # Loop on JacketComponents objects.
+        for rr, jacket in enumerate(self.inventory["JacketComponent"].collection):
+            jacket.get_heat(self)
+
+            # Call method jhtflx_new_0 to initialize JHTFLX to zeros for each 
+            # conductor solid components.
+            jacket.jhtflx_new_0(self)
+            # Call set_energy_counters to initialize EEXT and EJHT to zeros for 
+            # each conductor solid components.
+            jacket.set_energy_counters(self)
+            if (
+                abs(interf_flag.at[
+                    simulation.environment.KIND, jacket.identifier
+                ]) == 1
+            ):
+                # Evaluate the external heat by radiation in nodal points.
+                jacket._radiative_source_therm_env(self, simulation.environment)
+            # End if abb(interf_flag)
+            for _, jacket_c in enumerate(
+                self.inventory["JacketComponent"].collection[rr + 1 :]
+            ):
+                if (
+                    abs(
+                        self.dict_df_coupling["HTC_choice"].at[
+                            jacket.identifier, jacket_c.identifier
+                        ]
+                    )
+                    == 3
+                ):
+                    # Evaluate the inner heat exchange by radiation in nodal 
+                    # points.
+                    jacket._radiative_heat_exc_inner(self, jacket_c)
+                    jacket_c._radiative_heat_exc_inner(self, jacket)
+                # End if abs.
+            # End for jacket_c.
+        # End for rr.
+
+    def __get_heat_source_em_steady(self):
+
+        """Private method that initializes Joule power arrays due to the electric module. This method is called only once at conductor initialization and it is introduced in order to limit the number of times the check on time or number of step is carried out to select the suitable operation.
+        Call methods get_joule_power_along_steady and get_joule_power_across_steady because this method is called only at conductor initialization after the post processing of the electric solution evaluated with the steady state solver.
+        At the time being the method loops only on strand object because it is assumed that jackets do not carry currents. This allows to avoid the check on obj.name in methods get_joule_power_along_steady and get_joule_power_across_steady: the rationale is to call the method only if needed.
+        In the name of the method there is no reference to nodal or gauss point since method get_joule_power_along_steady updates dictionary dict_Gauss_pt while method get_joule_power_across_steady updates dictionary dict_node_pt.
+        """
+
+        # Loop on StrandComponent objects.
+        for strand in self.inventory["StrandComponent"].collection:
+            # Evaluate joule power due to electric resistance along strand 
+            # object.
+            strand.get_joule_power_along_steady(self)
+            # Evaluate joule power due to electric conductance across strand 
+            # object.
+            strand.get_joule_power_across_steady(self)
+
     def build_heat_source(self, simulation):
         """Method that builds heat source therms in nodal and Gauss points for 
         strand and jacket objects.
@@ -4628,12 +4827,6 @@ class Conductor:
             # Call method jhtflx_new_0 to initialize JHTFLX to zeros for each 
             # conductor solid components.
             jacket.jhtflx_new_0(self)
-            # Evaluate joule power due to electric resistance along jacket 
-            # object.
-            jacket.get_joule_power_along(self)
-            # Evaluate joule power due to electric conductance across jacket 
-            # object.
-            jacket.get_joule_power_across(self)
             # Call set_energy_counters to initialize EEXT and EJHT to zeros for 
             # each conductor solid components.
             jacket.set_energy_counters(self)
@@ -4666,7 +4859,11 @@ class Conductor:
 
     def __build_heat_source_gauss_pt(self):
         """Private method that builds heat source therms in Gauss points for 
-        strand and jacket objects."""
+        strand and jacket objects.
+        Sets to zeros the following arrays as preliminary step for the next evaluation:
+            * strand.dict_Gauss_pt["integral_power_el_res"]
+            * strand.dict_node_pt["integral_power_el_cond"]
+        """
 
         # Loop on StrandComponent objects.
         for strand in self.inventory["StrandComponent"].collection:
@@ -4684,6 +4881,11 @@ class Conductor:
                 + strand.dict_node_pt["total_linear_power_el_cond"][1:]
                 + strand.dict_Gauss_pt["linear_power_el_resistance"]
             )
+
+            # Set arrays strand.dict_Gauss_pt["integral_power_el_res"] and 
+            # strand.dict_node_pt["integral_power_el_cond"] to zero for the 
+            # next evaluation.
+            strand.set_power_array_to_zeros(self)
         
         # Loop on JacketComponents objects.
         for rr, jacket in enumerate(self.inventory["JacketComponent"].collection):
@@ -4728,6 +4930,55 @@ class Conductor:
             # End for jacket_c.
         # end for jacket.
     
+    def eval_integral_joule_power(self):
+        
+        """Method that evaluates the numerator of the expression used to evaluate the integral value of the Joule power. The Joule power along the current carriers is computed as:
+            P_Joule = \Delta_Phi * I
+        with
+            * I electric current in A
+            * \Delta_Ph electric voltage potential difference along current carriers in V
+        This approach was discussed with prof. Zach Hartwig and Dr. Nicolò Riva and is more general and coservative that the evaluation that takes into account only the contribution of the electric resistance.
+        For the Joule power due to the electric conductances between current carriers it is exploited the power computed in method get_total_joule_power_electric_conductance
+        Regardless of the kind of Joule power, the integration can be performed as follows:
+            P_Joule = 1/Delta_t_TH * int_0^Delta_t_TH (dt P_{Joule,i})
+        The above integral could be approximated as
+            P_Joule ~= 1/Delta_t_TH * sum_1^N_em dt_em P_{Joule,i}
+        Where:
+        * P_Joule: integral value of the Joule power in W
+        * P_{Joule,i}: value of the Joule power computed with the electric 
+        soltution at the i-th electric time step in W
+        * Delta_t_TH: value of the thermal hydraulic time step in s (always >= 
+        electric time step)
+        * dt_em: electric time step in s
+        * N_em: number of electric time step required to cover a full thermal 
+        hydraulic time step.
+
+        This method computes the numerator of the above equation, i.e.
+            sum_1^N_em dt_em P_{Joule,i}
+        The final quantities is computed in other methods (get_joule_power_along, get_joule_power_across).
+        """
+
+        # Loop on StrandComponent objects.
+        for strand in self.inventory["StrandComponent"].collection:
+            
+            # Compute the numerator of the integral Joule power along the 
+            # current carrier.
+            # N.B. this evaluation accounts aslo for the voltage due to the 
+            # inductance and is a conservative an more general approach.
+            # Discussed with prof. Zach Hartwig and Dr. Nicolò Riva.
+            strand.dict_Gauss_pt["integral_power_el_res"] += (
+                strand.dict_Gauss_pt["current_along"]
+                * strand.dict_Gauss_pt["delta_voltage_along"]
+                * self.electric_time_step
+            )
+
+            # Compute the numerator of the integral Joule power due to the 
+            # electric conductance between current carriers.
+            strand.dict_node_pt["integral_power_el_cond"] += (
+            strand.dict_node_pt["total_power_el_cond"]
+            * self.electric_time_step
+        )
+
     def operating_conditions_th_initialization(self,simulation):
         """Method that evaluates thermal hydraulic (th) operating conditions in both nodal and in Gauss points.
         To be called at initialization only since it avoids a second call to method self.__update_grid_features, which is already called in method self.__init__.
@@ -5064,9 +5315,17 @@ class Conductor:
                                 + dict_dummy_chan_r[flag_nodal]["temperature"] ** 2
                             )
                         )
-                        if self.cond_time[-1] > s_comp.operations["TQBEG"]:
-                            # implementation fully correct only for fully implicit method \
-                            # (cdp, 06/2020)
+                        if s_comp.operations["IQFUN"] != 0 and self.cond_time[-1] > s_comp.operations["TQBEG"]:
+                            # The check on s_comp.operations["IQFUN"] allows to 
+                            # compute htc_transient only if there is an 
+                            # heating. At the time being this correction does 
+                            # not account for the different ways to define an 
+                            # external heating, that is why user should specify 
+                            # the value of TQBEG also if IQFUN = -1 (read heat 
+                            # from external file).
+
+                            # Implementation fully correct only for fully 
+                            # implicit method.
                             htc_transient = np.sqrt(
                                 (
                                     dict_dummy_chan_r[flag_nodal][
