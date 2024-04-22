@@ -83,7 +83,7 @@ class Simulation:
         # Check if user specified a valid value to flag IADAPTIME.
         check_flag_value(
             self.transient_input["IADAPTIME"],
-            VALID_FLAG_VALUES["IADAPTIME"],
+            VALID_FLAG_VALUES,
             "IADAPTIME",
             self.starter_file_path,
             "TRANSIENT",
