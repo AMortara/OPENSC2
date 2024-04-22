@@ -922,7 +922,7 @@ class Simulation:
         # Load file transitory_input.
         transient_input = pd.read_excel(
             self.starter_file_path,
-            sheet_name="TRANSIENT",
+            sheet_name=SHEET_NAME["transitory_input"].transient,
             skiprows=1,
             header=0,
             index_col=0,
