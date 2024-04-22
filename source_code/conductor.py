@@ -129,11 +129,11 @@ class Conductor:
         self.workbook_name = os.path.join(
             self.BASE_PATH, simulation.transient_input["MAGNET"]
         )
-        self.workbook_sheet_name = [sheet.title for sheet in sheetConductorsList]
+
         # Load the sheet CONDUCTOR_files form file conducor_definition.xlsx as a disctionary.
         self.file_input = pd.read_excel(
             self.workbook_name,
-            sheet_name=self.workbook_sheet_name[0],
+            sheet_name=SHEET_NAME["conductor_definition"].files,
             skiprows=2,
             header=0,
             index_col=0,
@@ -142,7 +142,7 @@ class Conductor:
         # Load the sheet CONDUCTOR_input form file conducor_definition.xlsx as a disctionary.
         self.inputs = pd.read_excel(
             self.workbook_name,
-            sheet_name=self.workbook_sheet_name[1],
+            sheet_name=SHEET_NAME["conductor_definition"].inputs,
             skiprows=2,
             header=0,
             index_col=0,
@@ -171,7 +171,7 @@ class Conductor:
         # Load the sheet CONDUCTOR_operation form file conducor_definition.xlsx as a disctionary.
         self.operations = pd.read_excel(
             self.workbook_name,
-            sheet_name=self.workbook_sheet_name[2],
+            sheet_name=SHEET_NAME["conductor_definition"].operation,
             skiprows=2,
             header=0,
             index_col=0,
@@ -3871,7 +3871,7 @@ class Conductor:
 
         if mode!= SELF_INDUCTANCE_MODE_0 and mode != SELF_INDUCTANCE_MODE_1 and mode != SELF_INDUCTANCE_MODE_2:
             raise ValueError(
-                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {SHEET_NAME['conductor_definition'].operation} in file {self.workbook_name}.\n"
             )
         ABSTOL = 1e-6
         lmod = (
@@ -4172,7 +4172,7 @@ class Conductor:
         
         if mode!= SELF_INDUCTANCE_MODE_0 and mode != SELF_INDUCTANCE_MODE_1 and mode != SELF_INDUCTANCE_MODE_2:
             raise ValueError(
-                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {SHEET_NAME['conductor_definition'].operation} in file {self.workbook_name}.\n"
             )
 
         ll = (
@@ -4343,7 +4343,7 @@ class Conductor:
             and self.operations["INDUCTANCE_MODE"] != APPROXIMATE_INDUCTANCE
         ):
             raise ValueError(
-                f"{self.identifier = }\nArgument self.operations['INDUCTANCE_MODE'] should be equal to {CONSTANT_INDUCTANCE = } or {APPROXIMATE_INDUCTANCE = } or {ANALYTICAL_INDUCTANCE = }. Current value ({self.operations['INDUCTANCE_MODE'] = }) is not allowed. Please check {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+                f"{self.identifier = }\nArgument self.operations['INDUCTANCE_MODE'] should be equal to {CONSTANT_INDUCTANCE = } or {APPROXIMATE_INDUCTANCE = } or {ANALYTICAL_INDUCTANCE = }. Current value ({self.operations['INDUCTANCE_MODE'] = }) is not allowed. Please check {SHEET_NAME['conductor_definition'].operation} in file {self.workbook_name}.\n"
             )
 
         inductance_switch = {
