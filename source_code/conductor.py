@@ -64,7 +64,6 @@ from utility_functions.initialization_functions import (
 from utility_functions.gen_flow import gen_flow
 from utility_functions.output import (
     save_properties,
-    save_convergence_data,
     save_geometry_discretization,
 )
 from utility_functions.plots import update_real_time_plots, create_legend_rtp
@@ -5149,19 +5148,6 @@ class Conductor:
         # call method Mass_Energy_balance to get data for the space convergence \
         # (cdp, 09/2020)
         self.mass_energy_balance(simulation)
-        # call function Save_convergence_data to save solution spatial \
-        # distribution at TEND, together with the mass and energy balance results, \
-        # to make the space convergence analisys (cdp, 12/2020)
-        save_convergence_data(self, simulation.dict_path["Space_conv_output_dir"])
-        # call function Save_convergence_data to save solution spatial \
-        # distribution at TEND, together with the mass and energy balance results \
-        # to make the time convergence analisys (cdp, 12/2020)
-        save_convergence_data(
-            self,
-            simulation.dict_path["Time_conv_output_dir"],
-            abs(simulation.n_digit_time),
-            space_conv=False,
-        )
 
     # end Post_processing
 
