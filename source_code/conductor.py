@@ -4433,6 +4433,18 @@ class Conductor:
                 ii :: self.inventory["StrandComponent"].number
             ]
 
+            # Extrapolate the current at the nodes. This is useful for 
+            # correctly estimating the current sharing temperature by using the 
+            # current actually carried by the current carrier components. 
+            # (Prior to these changes, the input current was used, but this 
+            # could lead to over- or underestimation of the current sharing
+            #  temperature.)
+            obj.dict_node_pt["current_along"] = np.interp(
+                        self.grid_features["zcoord"],
+                        self.grid_features["zcoord_gauss"],
+                        obj.dict_Gauss_pt["current_along"]
+                        )
+
             obj.dict_Gauss_pt["delta_voltage_along"] = delta_voltage_along[
                 ii :: self.inventory["StrandComponent"].number
             ]
