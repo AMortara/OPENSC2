@@ -267,6 +267,11 @@ class SolidComponent:
                     self.dict_Gauss_pt["op_current_sc"] = self.dict_Gauss_pt[
                         "op_current"
                     ]
+                
+                # Assign current at t = 0s
+                if conductor.cond_time[-1] == 0:
+                    self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
+                    self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
 
                 if self.flagSpecfield_current == 2:
                     # Add also a logger
@@ -284,6 +289,12 @@ class SolidComponent:
                     self.dict_node_pt["op_current"][:-1]
                     + self.dict_node_pt["op_current"][1:]
                 ) / 2.0
+
+                # Assign current at t = 0s
+                if conductor.cond_time[-1] == 0:
+                    self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
+                    self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
+
                 if (
                     self.name == conductor.inventory["StackComponent"].name
                     or self.name == conductor.inventory["StrandMixedComponent"].name
