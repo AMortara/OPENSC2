@@ -682,6 +682,21 @@ class SolidComponent:
         n_elem = conductor.grid_input["NELEMS"]
         method = conductor.inputs["METHOD"]
 
+        # The current_along key is already added to the dictionary 
+        # dict_Gauss_pt when the get_current method is called, before this 
+        # method. Setting the vector associated to this key to 0 here is not in 
+        # itself a problem, but it can be confusing. For now, it is better to 
+        # leave things as they are; to fix this would require a major 
+        # refactoring of the entire electrical model and the part that 
+        # interfaces with the thermal-hydraulic model.
+        # Also, keeping the current_along key initialization in this method 
+        # avoids a KeyError in the save_simulation_time function. In fact, this 
+        # method is the only one that also initializes the current_along key in 
+        # dictionary dict_Gauss_pt for the JacketComponent, and the 
+        # save_simulation_time function has a loop on the SolidComponents for 
+        # which this key is also expected to be found in the dictionary 
+        # dict_Gauss_pt. If you remove this line of code, the key is not 
+        # assigned to the JacketComponents and the error is generated.
         self.dict_Gauss_pt["current_along"] = np.zeros(n_elem)
         self.dict_Gauss_pt["delta_voltage_along"] = np.zeros(n_elem)
         self.dict_Gauss_pt["delta_voltage_along_sum"] = np.zeros(n_elem)
