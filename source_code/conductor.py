@@ -4997,6 +4997,10 @@ class Conductor:
                     strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity_not_sc(
                             strand.dict_node_pt
                         )
+                elif isinstance(strand,StackComponent):
+                    strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.stack_electrical_resistivity_not_sc(
+                            strand.dict_node_pt
+                        )
                 elif isinstance(strand, StrandStabilizerComponent):
                     strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity(
                             strand.dict_node_pt
@@ -5086,6 +5090,10 @@ class Conductor:
                 if isinstance(strand,StrandMixedComponent):
                     strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity_not_sc(
                             strand.dict_Gauss_pt
+                        )
+                elif isinstance(strand, StackComponent):
+                    strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.stack_electrical_resistivity_not_sc(
+                        strand.dict_Gauss_pt
                         )
                 elif isinstance(strand, StrandStabilizerComponent):
                     strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity(
