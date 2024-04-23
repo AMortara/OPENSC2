@@ -547,7 +547,10 @@ class StackComponent(StrandComponent):
         if self.inputs["Material_number"] - 1 > 1:
             # Evaluate homogenized electrical resistivity of the stack:
             # rho_el_eq = A_not_sc * (sum(A_i/rho_el_i))^-1 for any i not sc
-            return self.cross_section["stab_sloped"] * np.reciprocal((self.cross_section["stab_sloped"] / electrical_resistivity).sum(axis=1))
+            # In this case becomes rho_el_eq = t_not_sc * (sum(t_i/rho_el_i))^-1 where t is the thickness
+            
+            return self.tape_thickness_not_sc * np.reciprocal((
+                self.material_thickness_not_sc / electrical_resistivity).sum(axis=1))
         elif self.inputs["Material_number"] - 1 == 1:
             return electrical_resistivity.reshape(property["temperature"].size)
 
