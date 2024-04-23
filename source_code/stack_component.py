@@ -657,6 +657,19 @@ class StackComponent(StrandComponent):
                 disp=False,
             )
 
+        # Tolerance on newton halley increased in case I_critical is very small,
+        # to avoid inaccuracies on the divider that could lead to voltage 
+        # differences between sc and stab that are not expected in the parallel
+        # of electric resistances
+        if min(critical_current)>1e-6:
+            # Default tolerance in optimize.newton method
+            tolerance = 1.48e-8
+        else:
+            # Value found trial and error iteration
+            # tollerance = 1e-12
+            # Other possible solution for the correct tolerance
+            tolerance = min(critical_current)/1e3
+
         # Evaluate superconducting with Halley's method
         sc_current = optimize.newton(
             self.__sc_current_residual,
@@ -664,6 +677,7 @@ class StackComponent(StrandComponent):
             args=(psi, current),
             fprime=self.__d_sc_current_residual,
             fprime2=self.__d2_sc_current_residual,
+            tol = tolerance,
             maxiter=1000,
         )
 
