@@ -845,6 +845,8 @@ class StackComponent(StrandComponent):
             if all(np.isclose(v_stab,v_sc)) == False:
                 raise ValueError(f"Voltage difference along superconductor and stabilizer must be the same.")
 
+        return self.dict_Gauss_pt["electric_resistance"]
+
     def initialize_store_sd(
         self,
         N_nod:int,
