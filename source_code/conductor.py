@@ -6696,7 +6696,7 @@ class Conductor:
         
         self.events_time = np.unique(self.events_time)
         # Check if t = 0.0 s is included in array events_time.
-        if np.isclose(self.events_time[0],0.0):
+        if self.events_time.size > 1 and np.isclose(self.events_time[0],0.0):
             # Remove t = 0.0 s from event_time since at this time only the 
             # initialization is performed.
             self.events_time = self.events_time[1:]
