@@ -267,18 +267,11 @@ class SolidComponent:
                     self.dict_Gauss_pt["op_current_sc"] = self.dict_Gauss_pt[
                         "op_current"
                     ]
-<<<<<<< HEAD
-                if conductor.cond_time[-1] == 0:
-                    self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
-                    self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
-
-=======
                 
                 # Assign current at t = 0s
                 if conductor.cond_time[-1] == 0:
                     self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
                     self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
->>>>>>> 7793a75401c4a0aca32861550739394fa397c6d8
 
                 if self.flagSpecfield_current == 2:
                     # Add also a logger
