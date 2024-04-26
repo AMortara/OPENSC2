@@ -10,7 +10,13 @@ class Coolant(FluidComponentInput):
 
     KIND = "Coolant"
 
-    def __init__(self, sheet, sheetOpar, dict_file_path, identifier):
+    def __init__(
+        self,
+        sheet,
+        sheetOpar,
+        dict_file_path,
+        identifier,
+    ):
         super().__init__(sheet, sheetOpar, dict_file_path, identifier)
         # Kind of the coolant; make it lowercase to be userd as alias in PropsSI.
         self.type = self.inputs["FLUID_TYPE"].lower()
@@ -42,6 +48,7 @@ class Coolant(FluidComponentInput):
         ]
         # Empty dictionary of list to save variable time evolutions at inlet and outlet spatial coordinates.
         self.time_evol_io = {key: list() for key in headers_inl_out}
+
         # Remove key FLUID_TYPE from self.inputs (it becomes attribute of object coolant); removes also for object channel.
         del self.inputs["FLUID_TYPE"]
 

@@ -3,9 +3,8 @@
 import numpy as np
 import os
 from scipy.linalg import solve_banded
-from utility_functions.auxiliary_functions import (
-    get_from_xlsx,
-)
+from utility_functions.auxiliary_functions import get_from_xlsx
+
 from typing import Union
 
 from conductor import Conductor
@@ -35,155 +34,299 @@ from utility_functions.step_matrix_construction import (
     build_known_therm_vector,
 )
 
-def get_time_step(conductor, transient_input, num_step):
+def get_time_step(
+    conductor:Conductor,
+    transient_input:dict,
+    fpath:str,
+    )->float:
 
+    """Function that allows computes the time step for the thermal-hydraulic loop according to the value of flag IADAPTIME:
+        * -2 -> adaptive time step from user defiend function
+        * -1 -> adaptive time step from user defined auxiliary input file
+        * 0 -> no adaptive time step (time_step = t_step_min)
+        * 1 -> adaptive time step accounting for variation in the whole thermal-hydraulic solution
+        * 2 -> adaptive time step accounting only for variation in temperature solution
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        transient_input (dict): data structure with user defined input related to the simulation among which time step possible range and duration of the simulation.
+        fpath (str): path to the master input file, where user can set the value to flag IADAPTIME.
+
+    Raises:
+        NotImplementedError: if IADAPTIME = -1 since at the time being this option is not available (to be implemented in a later future).
+
+    Returns:
+        float: time step for the thermal-hydraulic loop to be used in the next iteration. The nex value of conductor.cond_time is evaluated as conductor.cond_time[-1] + time_step.
     """
-    ##############################################################################
-      SUBROUTINE GETSTP(TIME,TEND  ,STPMIN,STPMAX, &
-      PRVSTP,OPTSTP,ICOND,NCOND) # cza added NCOND (August 14, 2017)
-    ##############################################################################
-    # Translation from Fortran to Python: Placido D. PoliTo, 07/08/2020
-    ##############################################################################
-    """
 
-    TINY = 1.0e-10
-    FACTUP = 1.2
-    FACTLO = 0.5
+    # Aliases
+    iadaptime = transient_input["IADAPTIME"]
+    t_step_min = transient_input["STPMIN"]
+    t_end = transient_input["TEND"]
+    # Previous time step
+    prv_time_step = conductor.time_step
 
-    if num_step == 1:
-        # at the first step time_step is equal to STPMIN for all the conductors \
-        # (cdo, 08/2020)
-        conductor.time_step = transient_input["STPMIN"]
-    else:
-        # STORE THE PREVIOUS VALUE OF THE OPTIMAL TIME STEP
-        #      PRVSTP=OPTSTP
-        PRVSTP = conductor.time_step
-        if transient_input["IADAPTIME"] == 0:
-            conductor.time_step = transient_input["STPMIN"]
-            # C * LIMIT THE TIME STEP IF PRINT-OUT OR STORAGE IS REQUIRED
-            conductor.time_step = min(
-                conductor.time_step, transient_input["TEND"] - conductor.cond_time[-1]
-            )  # crb (March 9, 2011)
-            return
+    # Introduce to avoid division by zero in the evaluation of t_step_comp.
+    tiny_value = 1e-10
 
-        # Ad hoc to emulate time adaptivity for simulation whith feeder CS3U2.
-        # Do not use STPMIN; it is tuned on the AC loss time evolution.
-        if transient_input["IADAPTIME"] == 3:
-            # Array of times.
-            times = np.array([0.0, transient_input["TIME_SHIFT"], transient_input["TIME_SHIFT"]+10.0-1.0, transient_input["TIME_SHIFT"] + 69.0, transient_input["TIME_SHIFT"] + 69.8, transient_input["TIME_SHIFT"] + 69.9, transient_input["TIME_SHIFT"]+ 70.0, transient_input["TIME_SHIFT"] + 70.1, transient_input["TIME_SHIFT"] + 70.15, transient_input["TIME_SHIFT"] + 70.5, transient_input["TIME_SHIFT"] + 71.0,transient_input["TIME_SHIFT"] + 73.0])
-            # Adapt the time step according to the simulation time.
-            if conductor.cond_time[-1] >= times[0] and conductor.cond_time[-1] <= times[1]:
-                # Phase in which there is only radiative heat that stabilizes 
-                # at time_shift; for the next 9 s there is no magnetic fiel or 
-                # current or ac loss.
-                conductor.time_step = 1.0 # s
-            elif conductor.cond_time[-1] >= times[1] and conductor.cond_time[-1] < times[2]:
-                # Some AC loss appears
-                conductor.time_step = 1e-1 # s
-            elif conductor.cond_time[-1] >= times[2] and conductor.cond_time[-1] < times[3]:
-                # Some AC loss appears
-                conductor.time_step = 1e-2 # s
-            elif conductor.cond_time[-1] >= times[3] and conductor.cond_time[-1] < times[4]:
-                conductor.time_step = 1e-3 # s
-            elif conductor.cond_time[-1] >= times[4] and conductor.cond_time[-1] < times[5]:
-                conductor.time_step = 1e-4 # s
-            elif conductor.cond_time[-1] >= times[5] and conductor.cond_time[-1] < times[6]:
-                # High and localized AC loss peack
-                conductor.time_step = 1e-5 # s
-            elif conductor.cond_time[-1] >= times[6] and conductor.cond_time[-1] < times[7]:
-                conductor.time_step = 1e-4 # s
-            elif conductor.cond_time[-1] >= times[7] and conductor.cond_time[-1] < times[8]:
-                conductor.time_step = 1e-3 # s
-            elif conductor.cond_time[-1] >= times[8] and conductor.cond_time[-1] < times[9]:
-                conductor.time_step = 5e-3 # s
-            elif conductor.cond_time[-1] >= times[9] and conductor.cond_time[-1] < times[10]:
-                conductor.time_step = 1e-2 # s
-            else:
-                conductor.time_step = 5e-2 # s
-                # C * LIMIT THE TIME STEP IF PRINT-OUT OR STORAGE IS REQUIRED
-                conductor.time_step = min(
-                    conductor.time_step, transient_input["TEND"] - conductor.cond_time[-1])
-            return
-        
-        # crb Differentiate the indexes depending on ischannel (December 16, 2015)
-        t_step_comp = np.zeros(conductor.dict_N_equation["NODOFS"])
-        for ii in range(conductor.inventory["FluidComponent"].number):
-            # FluidComponent objects (cdp, 08/2020)
-            # C * THE FOLLOWING STATEMENTS WOULD CONTROL THE ACCURACY OF MOMENTUM...
-            if abs(transient_input["IADAPTIME"]) == 1:  # crb (Jan 20, 2011)
-                # (cdp, 08/2020)
-                t_step_comp[ii] = conductor.EIGTIM / (conductor.EQTEIG[ii] + TINY)
-                t_step_comp[
-                    ii + conductor.inventory["FluidComponent"].number
-                ] = conductor.EIGTIM / (
-                    conductor.EQTEIG[
-                        ii + conductor.inventory["FluidComponent"].number
-                    ]
-                    + TINY
-                )
-            elif transient_input["IADAPTIME"] == 2:
-                # C * ... BUT ARE SUBSTITUTED BY THESE
-                t_step_comp[ii] = 1.0e10
-                t_step_comp[
-                    ii + conductor.inventory["FluidComponent"].number
-                ] = 1.0e10
-            # endif (iadaptime)
-            t_step_comp[
-                ii + 2 * conductor.inventory["FluidComponent"].number
-            ] = conductor.EIGTIM / (
-                conductor.EQTEIG[
-                    ii + 2 * conductor.inventory["FluidComponent"].number
-                ]
-                + TINY
-            )
-            # TSTPVH2 = 1.0e+10
-            # TSTPPH2 = 1.0e+10
-            # TSTPTH2 = 1.0e+10
-            # crb (June 26, 2015) # cod (July 23, 2015)
-        for ii in range(conductor.inventory["SolidComponent"].number):
-            # SolidComponent objects (cdp, 08/2020)
-            t_step_comp[
-                ii + conductor.dict_N_equation["FluidComponent"]
-            ] = conductor.EIGTIM / (
-                conductor.EQTEIG[ii + conductor.dict_N_equation["FluidComponent"]]
-                + TINY
-            )
-
-        # C * STORED THE OPTIMAL TIME STEP (FROM ACCURACY POINT OF VIEW)
-        OPTSTP = min(t_step_comp)  # cod (July 23, 2015)
-
-        # CL* CONTROL THE TIME STEPPING ALSO BY THE VOLTAGE
-        # cl* add following lines
-        # cl* August 17, 2000 - start *************************************
-        # è associata almodulo elettrico,ignorare per ora
-        ##if FFLAG_IOP > 0:
-        ##	TSTEP_VOLT = EFIELD_INCR(ICOND)/conductor.time_step
-        ##	TSTEP_VOLT = DBLE(EIGTIM(ICOND)/TSTEP_VOLT)
-        ##	OPTSTP=min(TSTPVB,TSTPVH1,TSTPVH2,TSTPPH1,TSTPPH2,TSTPPB,&# cod (July 23, 2015)
-        ##	 &             TSTPTH1,TSTPTH2,TSTPTB,TSTPCO,TSTPJK,TSTEP_VOLT)
-
-        # cl* August 17, 2000 - end ***************************************
-
-        # C * CHANGE THE STEP SMOOTHLY
-        if conductor.time_step < 0.5 * OPTSTP:
-            conductor.time_step = conductor.time_step * FACTUP
-        elif conductor.time_step > 1.0 * OPTSTP:
-            conductor.time_step = conductor.time_step * FACTLO
-        # endif
-
-        # C * LIMIT THE TIME STEP IN THE WINDOW ALLOWED BY THE USER
-        conductor.time_step = max(conductor.time_step, transient_input["STPMIN"])
-        # caf June 26, 2015 moved these 2 lines to the end of the subroutine
-        # C * LIMIT THE TIME STEP IF PRINT-OUT OR STORAGE IS REQUIRED
-        conductor.time_step = min(
-            conductor.time_step, transient_input["TEND"] - conductor.cond_time[-1]
+    if conductor.force_next_tstep_flag:
+        # Flag conductor.force_next_tstep_flag is true only if the previous 
+        # time step was corrected to force the beginning of an event (like 
+        # localized heating) at the desired time, i.e. the one prescribed by 
+        # the user. When it is true, the current time step (dt) is set equal to 
+        # the previous one. This occurs when, with the value for dt computed by 
+        # function get_time_step, the time t_k and t_{k+1} are such that
+        # t_k < t_e < t_{k+1}.
+        # with t_k the current time, t_{k+1} the next time and t_e the time at 
+        # which an event shoudl occur (like the benning or the ending of a 
+        # localized heating).
+        # In this situation t_e would be missed, so a new forced value for dt 
+        # is evaluated as dt_f = t_e - t_k. Then the next time steps are 
+        # t_{k+1} = t_e
+        # t_{k+2} = t_e + dt_f
+        # (this last definition is made thanks to this if statement).
+        conductor.force_next_tstep_flag = False
+        print(
+            f"Forced {conductor.identifier} time step: {conductor.next_time_step} s\n"
         )
-        # C --------------
-        print(f"Selected conductor time step is: {conductor.time_step}\n")
-        # C --------------
-        # caf end *********************************************** June 26, 2015
+        return conductor.next_time_step
 
-def step(conductor, environment, qsource, num_step):
+    if iadaptime == 0:
+        
+        time_step = min(
+            transient_input["TIME_STEP"], t_end - conductor.cond_time[-1]
+        )
+        return time_step
+    elif iadaptime > 0:
+
+        # Adaptive time step as a response of the variations in the 
+        # thermal-hydraulic solution:
+        # IADAPTIME = 1 considers the whole solution (velocity, pressure 
+        # and temperature for fluid components and temperature for solid 
+        # components);
+        # IADAPTIME = 2 considers only temperature variation in fluid and 
+        # solid components.
+
+        # This would control the accuracy of the momentum; used to select 
+        # the next adaptive time step.
+        t_step_comp = conductor.EIGTIM / (conductor.EQTEIG + tiny_value)
+        
+        if abs(iadaptime) == 1:
+            # Store the optimal time step (from accuracy point of view) 
+            # accounting for the whole solution variation.
+            opt_tstep = t_step_comp.min()
+        elif iadaptime == 2:
+            # Index of the temperature unknown of the first fluid 
+            # component, i.e. first index corresponding to a temperature in 
+            # the solution vector, starting from that index there are only 
+            # temperatures. Index is computed with left binary shift.
+            idx_first_temp = conductor.inventory["FluidComponent"].number << 1
+            # Store the optimal time step (from accuracy point of view) 
+            # accounting for the temperature variation only.
+            opt_tstep = t_step_comp[idx_first_temp:].min()
+
+        # Tune the time step smoothly
+        if prv_time_step < 0.25 * opt_tstep: # old value was 0.5
+            time_step = prv_time_step * transient_input["MLT_INCREASE"]
+        elif prv_time_step > 0.8 * opt_tstep: # old value was 1.0
+            time_step = prv_time_step * transient_input["MLT_DECREASE"]
+        else:
+            time_step = prv_time_step
+        
+        # Limit the time step in the window allowed by the user
+        time_step = max(time_step, t_step_min)
+        time_step = min(time_step, transient_input["STPMAX"])
+        time_step = min(
+            time_step, t_end - conductor.cond_time[-1]
+        )
+        
+        print(f"Selected conductor time step is: {time_step}\n")
+
+        return time_step
+    elif iadaptime < 0:
+        # Get adaptive time step from user defined auxiliary input file 
+        # (IADAPTIME = -1) or from user defined function 
+        # user_adaptive_time_step (IADAPTIME = -2)
+
+        if iadaptime == -1:
+            raise NotImplementedError(f"Adaptive time step from user defined input file (IADAPTIME = -1) should still be implemented. Plese consider using another allowed value for flag IADAPTIME in sheet TRANSIENT of input file {fpath}.")
+        elif iadaptime == -2:
+            return user_adaptive_time_step(
+                conductor,
+                transient_input,
+            )
+
+def user_adaptive_time_step(conductor:Conductor,transient_input:dict)->float:
+    """Function that allows user to specify its own rules for the adaptive time step for the thermal-hydraulic loop.
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        transient_input (dict): data structure with user defined input related to the simulation among which time step possible range and duration of the simulation.
+
+    Returns:
+        float: time step for the thermal-hydraulic loop to be used in the next iteration. The nex value in conductor.cond_time is evaluated as conductor.cond_time[-1] + time_step.
+    """
+
+    # ALIASES
+    # Minimum time step.
+    stpmin = transient_input["STPMIN"]
+    # Maximum time step
+    stpmin = transient_input["STPMAX"]
+    # End time of the simulatin
+    tend = transient_input["TEND"]
+    # Time to start use an adaptive time step
+    time_ref = transient_input["TIMEREF"]
+    # Time duration of the most refined grid
+    tau_ref = transient_input["TAUREF"]
+    # List with all the conductor time step
+    time = conductor.cond_time
+    # Present conductor time step.
+    time_step = conductor.time_step
+
+    # User may write its own code below. User could exploit the above listed 
+    # aliases but it is not mandatory.
+
+    return time_step
+
+def time_and_event_synchronization(
+    conductor: Conductor,
+    epsilon: float,
+    t_step_min: float,
+    ) -> Conductor:
+
+    """Function that syncronizes the time and the time of the event if their difference in absolute value is smaller than the uncertainty associated to the time step, i.e. |t_{k+1} - t_e| < epsilon.
+    If it is the case, the event is associated to time t_{k+1} so that t_{k+1} = t_e withouth changing the time step length (since the event is in the neighborhood of t_{k+1}).
+    When an event is detected the next time step is forced to be the minimum time step defined by the user.
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        epsilon (float): uncertainty associated to the time step to detect events and diagnostic saving times.
+        t_step_min (float): minimum value for the time step as defined by the user.
+
+    Returns:
+        Conductor: conductor object with the following updated attributes
+            * cond_time
+            * cond_num_step
+            * appended_time_flag
+            * force_next_tstep_flag
+            * next_time_step
+            * i_event
+    """
+
+    # Alias
+    # The last evaluated time (t_k)
+    time_k = conductor.cond_time[-1]
+    # Time that will be evaluated with the value of the time step returned by 
+    # function get_time_step (remember that function get_time_step is called 
+    # before this function) and that would be used to compute the next 
+    # thermal-hydraulic solution.
+    time_kp1 = time_k + conductor.time_step
+    # Index of the time event that should occur in the timeline
+    i_event = conductor.i_event
+    # Time at which the next event should occur
+    time_e = conductor.events_time[i_event]
+
+    if (time_e >= time_kp1 - epsilon and time_e <= time_kp1 + epsilon):
+        # Force only the time without changing the time step since 
+        # |t_{k+1} - t_e| < epsilon
+        # epsilon is the accepted uncertainty on the time step.
+
+        # Append the time of the event as the next item of list cond_time
+        conductor.append_time(time_e)
+        # When an event is detected, the next time step should be the minimum.
+        conductor.force_next_tstep_flag = True
+        # The next time function get_time_step is called for the current 
+        # conductor, the selected value for the time step will be the one 
+        # stored in conductor.next_time_step. (When this function is called, 
+        # the value of the time step for the next thermal hydraulic step is 
+        # already known, the force value will be the one next one).
+        conductor.next_time_step = t_step_min
+        # Ask to update i_event if possible.
+        conductor.move_to_next_event()
+
+    return conductor
+
+def force_time_step(
+    conductor: Conductor,
+    t_step_min: float,
+    ) -> Conductor:
+    
+    """Function that forces the time step if the value of the time step 
+    computed with function get_time_step is such that the next event in the 
+    time line will be missed.
+    This occurs when, with the value for dt computed by function get_time_step, 
+    the time t_k and t_{k+1} are such that
+    t_k < t_e < t_{k+1}.
+    with t_k the current time, t_{k+1} the next time and t_e the time at 
+    which an event shoudl occur (like the benning or the ending of a 
+    localized heating).
+    In this situation t_e would be missed, so a new forced value for dt 
+    is evaluated as dt_f = t_e - t_k. Then the next time steps are 
+    t_{k+1} = t_e
+    t_{k+2} = t_e + dt_f
+    The value of dt_f is controlled with tstep_min_lb, see the description for 
+    further details.
+
+    Args:
+        conductor (Conductor): object with all the information of the conductor.
+        t_step_min (float): minimum value for the time step as defined by the user.
+
+    Returns:
+        Conductor: conductor object with the following updated attributes
+            * cond_time
+            * cond_num_step
+            * appended_time_flag
+            * time_step
+            * force_next_tstep_flag
+            * next_time_step
+            * i_event
+    """
+
+    # Alias
+    # The last evaluated time (t_k)
+    time_k = conductor.cond_time[-1]
+    # Time that will be evaluated with the value of the time step returned by 
+    # function get_time_step (remember that function get_time_step is called 
+    # before this function) and that would be used to compute the next 
+    # thermal-hydraulic solution.
+    time_kp1 = time_k + conductor.time_step
+    # Index of the time event that should occur in the timeline
+    i_event = conductor.i_event
+    # Time at which the next event should occur
+    time_e = conductor.events_time[i_event]
+
+    # Check if t_k < t_e < t_{k+1}
+    if time_k < time_e and time_kp1 > time_e:
+        # t_k < t_e < t_{k+1}: need to force the time step in order to not miss 
+        # the event at t_e.
+
+        # Force time step so that t_{k+1} = t_e:
+        # dt_f = t_e - t_k
+        time_step = time_e - conductor.cond_time[-1]
+        print(
+            f"Forced {conductor.identifier} time step: {time_step} s\n"
+        )
+
+        # Append the time of the event as the next item of list cond_time
+        conductor.append_time(time_e)
+        conductor.time_step = time_step
+        # Force next time step so that t_{k+2} = t_e + dt_f
+        conductor.force_next_tstep_flag = True
+        if time_step < t_step_min:
+            # The possibility that time_step < epsilon is avoided by function 
+            # syncronize_time_and_event. epsilon is the uncertainty associated 
+            # to the time step.
+            # Assign next time step value
+            conductor.next_time_step = time_step
+        else:
+            conductor.next_time_step = t_step_min
+        
+        # Ask to update i_event if possible.
+        conductor.move_to_next_event()
+
+    return conductor
+
+def step(conductor, envionment, qsource, num_step):
 
     """
     ##############################################################################
@@ -560,6 +703,10 @@ def step(conductor, environment, qsource, num_step):
             for obj in conductor.inventory["SolidComponent"].collection
         }
     )
+    
+    # Save an hard copy of the thermal-hydraulic problem solution at the 
+    # previous time step.
+    prv_sysvar = conductor.dict_Step["SYSVAR"][:, 0].copy()
 
     SYSMAT = gredub(conductor, SYSMAT)
     # Compute the solution at current time stepand overwrite key SYSVAR of \
@@ -574,21 +721,35 @@ def step(conductor, environment, qsource, num_step):
     CHG = np.zeros(conductor.dict_N_equation["Total"])
     EIG = np.zeros(conductor.dict_N_equation["Total"])
 
+    # Compute the variation of the solution wrt the solution at the previous 
+    # time step.
+    sol_var = (
+        (conductor.dict_Step["SYSVAR"][:, 0] - prv_sysvar)
+        / (prv_sysvar + TINY)
+    )
+
     # Evaluate the norm of the solution.
-    conductor.dict_norm["Solution"] = eval_sub_array_norm(Known,conductor)
+    conductor.dict_norm["Solution"] = eval_sub_array_norm(
+        conductor.dict_Step["SYSVAR"][:, 0],conductor
+    )
 
     # COMPUTE THE NORM OF THE SOLUTION CHANGE, THE EIGENVALUES AND RECOVER THE \
     # VARIABLES FROM THE SYSTEM SOLUTION (START)
 
     # Those are arrays
     # Solution change
-    CHG = Known - conductor.dict_Step["SYSVAR"][:, 0]
+    CHG = conductor.dict_Step["SYSVAR"][:, 0] - prv_sysvar
     # Eigenvalues (sort of??)
-    EIG = abs(CHG / conductor.time_step) / (abs(Known) + TINY)
+    EIG = (
+        abs(CHG / conductor.time_step)
+        / (abs(conductor.dict_Step["SYSVAR"][:, 0]) + TINY)
+    )
+    
     # Evaluate the norm of the solution change.
     conductor.dict_norm["Change"] = eval_sub_array_norm(CHG,conductor)
+
     # Evaluate the eigenvalues of the solution.
-    conductor.EQTEIG = eval_eigenvalues(EIG,conductor)
+    conductor.EQTEIG = eval_sub_array_max(EIG,conductor)
     # Reorganize thermal hydraulic solution
     reorganize_th_solution(
         conductor,
@@ -828,6 +989,14 @@ def eval_sub_array_norm(
     # Collection of NamedTuple with fluid equation index (velocity, pressure 
     # and temperaure equations) and of integer for solid equation index.
     eq_idx = conductor.equation_index
+
+    # Create a hard copy of the variable 'array' to prevent the propagation 
+    # outside the function of changes resulting from manipulation of that 
+    # variable; this would occur because the 'array' variable is a mutable 
+    # object and is passed by assignments, so in the absence of the hard copy, 
+    # the changes would be visible in all instances of the variable outside the 
+    # function.
+    array = array.copy()
     # Evaluate the square of the array.
     array **= 2.0
 
@@ -855,19 +1024,19 @@ def eval_sub_array_norm(
     
     return np.sqrt(sub_array_norm)
 
-def eval_eigenvalues(
+def eval_sub_array_max(
     array:np.ndarray,
     conductor:Conductor,
     )->np.ndarray:
     """
-    Function that evaluate an approximation of the eigenvalues of the solution of as many sub arrays as the number of unknowns of the thermal hydraulic problem stored insde input argument array. Being jj the j-th unknown (i.e. CHAN_1 temperature), the sub array is given by sub_arr = array[jj::ndf] if ndf is the number of unknowns (number of degrees of freedom). The eigenvalue is the maximum value of this sub array. The final outcome is an array of eigenvalues with ndf elements.
+    Function that evaluates the maximum value of as many sub arrays as the number of unknowns of the thermal hydraulic problem stored insde input argument array. Being jj the j-th unknown (i.e. CHAN_1 temperature), the sub array is given by sub_arr = array[jj::ndf] if ndf is the number of unknowns (number of degrees of freedom). Then the maximum of this value is extracted. The final outcome is an array of maximum values with ndf elements.
 
     Args:
-        array (np.ndarray): array containing ndf sub arrays (each being an approximation of the eigenvalues of the thermal hydraulic solution).
+        array (np.ndarray): array containing ndf sub arrays (each being an approximation of the eigenvalues of the thermal hydraulic solution or the norm of the solution variation wrt the previous time step).
         conductor (Conductor): object with all the information of the conductor.
     
     Returns:
-        np.ndarray: array of eigenvalues with ndf elements.
+        np.ndarray: array of maximum values with ndf elements.
     """
 
     # Alias
@@ -879,22 +1048,22 @@ def eval_eigenvalues(
     # COMPUTE THE EIGENVALUES
     for f_comp in conductor.inventory["FluidComponent"].collection:
         # velocity
-        sub_array[eq_idx[f_comp.identifier].velocity] = max(
-            array[eq_idx[f_comp.identifier].velocity::ndf]
+        sub_array[eq_idx[f_comp.identifier].velocity] = (
+            array[eq_idx[f_comp.identifier].velocity::ndf].max()
         )
         # pressure
-        sub_array[eq_idx[f_comp.identifier].pressure] = max(
-            array[eq_idx[f_comp.identifier].velocity::ndf]
+        sub_array[eq_idx[f_comp.identifier].pressure] = (
+            array[eq_idx[f_comp.identifier].pressure::ndf].max()
         )
         # temperature
-        sub_array[eq_idx[f_comp.identifier].temperature] = max(
-            array[eq_idx[f_comp.identifier].temperature::ndf]
+        sub_array[eq_idx[f_comp.identifier].temperature] = (
+            array[eq_idx[f_comp.identifier].temperature::ndf].max()
         )
     # Loop on SolidComponent.
     for s_comp in conductor.inventory["SolidComponent"].collection:
         # temperature
-        sub_array[eq_idx[s_comp.identifier]] = max(
-            array[eq_idx[s_comp.identifier]::ndf]
+        sub_array[eq_idx[s_comp.identifier]] = (
+            array[eq_idx[s_comp.identifier]::ndf].max()
         )
     
     return sub_array

@@ -267,10 +267,18 @@ class SolidComponent:
                     self.dict_Gauss_pt["op_current_sc"] = self.dict_Gauss_pt[
                         "op_current"
                     ]
+<<<<<<< HEAD
                 if conductor.cond_time[-1] == 0:
                     self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
                     self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
 
+=======
+                
+                # Assign current at t = 0s
+                if conductor.cond_time[-1] == 0:
+                    self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
+                    self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
+>>>>>>> 7793a75401c4a0aca32861550739394fa397c6d8
 
                 if self.flagSpecfield_current == 2:
                     # Add also a logger
@@ -288,6 +296,12 @@ class SolidComponent:
                     self.dict_node_pt["op_current"][:-1]
                     + self.dict_node_pt["op_current"][1:]
                 ) / 2.0
+
+                # Assign current at t = 0s
+                if conductor.cond_time[-1] == 0:
+                    self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
+                    self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
+
                 if (
                     self.name == conductor.inventory["StackComponent"].name
                     or self.name == conductor.inventory["StrandMixedComponent"].name
@@ -312,6 +326,10 @@ class SolidComponent:
                 if conductor.cond_num_step == 0:
                     self.dict_node_pt["op_current"] = np.zeros(conductor.grid_features["N_nod"])
                     self.dict_Gauss_pt["op_current"] = np.zeros(conductor.grid_input["NELEMS"])
+                    # initialize current along to 0 at t=0 to avoid KeyError in 
+                    # method eval_tcs.
+                    self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
+                    self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
             
             elif conductor.inputs["I0_OP_MODE"] == IOP_FROM_EXT_FUNCTION:
                 raise ValueError(
@@ -329,6 +347,10 @@ class SolidComponent:
             # Initialize array op_current to 0 in dictionary dict_Gauss_pt to
             # avoid error.
             self.dict_Gauss_pt["op_current"] = np.zeros(conductor.grid_input["NELEMS"])
+            # initialize current along to 0 at t=0 to avoid KeyError in 
+            # method eval_tcs.
+            self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
+            self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
             # This is exploited in the electric resistance evaluation.
             if (
                 self.name == conductor.inventory["StackComponent"].name
@@ -678,6 +700,21 @@ class SolidComponent:
         n_elem = conductor.grid_input["NELEMS"]
         method = conductor.inputs["METHOD"]
 
+        # The current_along key is already added to the dictionary 
+        # dict_Gauss_pt when the get_current method is called, before this 
+        # method. Setting the vector associated to this key to 0 here is not in 
+        # itself a problem, but it can be confusing. For now, it is better to 
+        # leave things as they are; to fix this would require a major 
+        # refactoring of the entire electrical model and the part that 
+        # interfaces with the thermal-hydraulic model.
+        # Also, keeping the current_along key initialization in this method 
+        # avoids a KeyError in the save_simulation_time function. In fact, this 
+        # method is the only one that also initializes the current_along key in 
+        # dictionary dict_Gauss_pt for the JacketComponent, and the 
+        # save_simulation_time function has a loop on the SolidComponents for 
+        # which this key is also expected to be found in the dictionary 
+        # dict_Gauss_pt. If you remove this line of code, the key is not 
+        # assigned to the JacketComponents and the error is generated.
         self.dict_Gauss_pt["current_along"] = np.zeros(n_elem)
         self.dict_Gauss_pt["delta_voltage_along"] = np.zeros(n_elem)
         self.dict_Gauss_pt["delta_voltage_along_sum"] = np.zeros(n_elem)
@@ -982,3 +1019,18 @@ class SolidComponent:
                 self.operations["IOP_MODE"] = 1
             elif self.operations["IOP_MODE"] == False:
                 self.operations["IOP_MODE"] = 0
+
+    def __initialize_store_sd(self,N_nod,N_elem):
+        """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
+        t_save_left (last time step before t_save), at t_save_right (first 
+        time step after t_save) and at t_save (user defined time at which 
+        save spatial distribution).
+
+        Args:
+            N_nod (int): (initial) number of nodes of the mesh
+            N_elem (int): (initial) number of elements of the mesh
+
+        Raises:
+            NotImplementedError: the method is not implemented in the base class
+        """
+        raise NotImplementedError("Method __initialize_store_sd is not implemented in the base class.")

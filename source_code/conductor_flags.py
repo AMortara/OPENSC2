@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 # Flags for the current definition
 
 # User does not define a current: do not use the electric module
@@ -42,3 +44,87 @@ VARIABLE_CONTACT_PERIMETER = -1
 # Constant contact perimeter (from sheet contact_perimeter in file 
 # conductor_coupling.xlsx)
 CONSTANT_CONTACT_PERIMETER = 1
+
+# Namedtuple constructor for conductor sheet names
+Cond_sheet_name = namedtuple("Cond_sheet_name",
+    (
+        "files",
+        "inputs",
+        "operation",
+        "coupling",
+    )
+)
+
+# Namedtuple constructor for diagnostic sheet names
+Diagno_sheet_name = namedtuple("Cond_sheet_name",
+    (
+        "space_distr",
+        "time_evol",
+    )
+)
+
+# Namedtuple constructor for component sheet names
+Comp_sheet_name = namedtuple("Comp_sheet_name",
+    (
+        "FluidComponent",
+        "StackComponent",
+        "StrandMixedComponent",
+        "StrandStabilizerComponent",
+        "JacketComponent",
+    )
+)
+
+# Namedtuple constructor for environment sheet name
+Env_sheet_name = namedtuple("Env_sheet_name",("environment"))
+
+# Namedtuple constructor for transient sheet name
+Trans_sheet_name = namedtuple("Trans_sheet_name",("transient"))
+
+# Dictionary with all the valid sheet names of each input file.
+SHEET_NAME = dict(
+    conductor_coupling = {
+            "contact_perimeter_flag",
+            "contact_perimeter",
+            "HTC_choice",
+            "contact_HTC",
+            "thermal_contact_resistance",
+            "HTC_multiplier",
+            "electric_conductance_mode",
+            "electric_conductance",
+            "open_perimeter_fract",
+            "interf_thickness",
+            "trans_transp_multiplier",
+            "view_factors",
+            },
+    conductor_definition = Cond_sheet_name(
+        files = "CONDUCTOR_files",
+        inputs = "CONDUCTOR_input",
+        operation = "CONDUCTOR_operation",
+        coupling = "CONDUCTOR_coupling",
+        ),
+    conductor_diagnostic = Diagno_sheet_name(
+        space_distr = "Spatial_distribution",
+        time_evol = "Time_evolution",
+        ),
+    conductor_grid = {"GRID"},
+    # Key conductor_input is a namedtuple and not a set because I want to 
+    # exploit access by field in method conductor_component_instance.
+    conductor_input = Comp_sheet_name(
+        FluidComponent = "CHAN",
+        StackComponent = "STACK",
+        StrandMixedComponent = "STR_MIX",
+        StrandStabilizerComponent = "STR_STAB",
+        JacketComponent = "Z_JACKET",
+        ),
+    # Key conductor_input is a namedtuple and not a set because I want to 
+    # exploit access by field in method conductor_component_instance.
+    conductor_operation = Comp_sheet_name(
+        FluidComponent = "CHAN",
+        StackComponent = "STACK",
+        StrandMixedComponent = "STR_MIX",
+        StrandStabilizerComponent = "STR_STAB",
+        JacketComponent = "Z_JACKET",
+        ),
+    environment_input = Env_sheet_name(environment = "ENVIRONMENT"),
+    transitory_input = Trans_sheet_name(transient = "TRANSIENT"),
+)

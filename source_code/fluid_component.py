@@ -564,4 +564,46 @@ class FluidComponent:
         
         return known,sysmat
 
+    def initialize_store_sd(
+        self,
+        N_nod:int,
+        )->dict:
+        """Method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
+        t_save_left (last time step before t_save), at t_save_right (first 
+        time step after t_save) and at t_save (user defined time at which 
+        save spatial distribution).
+
+        Args:
+            N_nod (int): (initial) number of nodes of the mesh
+
+        Returns:
+            dict: initialized data structure for spatial distribution in nodal points.
+        """
+        
+        prop_save_sd = (
+            "velocity",
+            "pressure",
+            "temperature",
+            "total_density",
+            "friction_factor",
+        )
+
+        # Data structure that stores spatial distribution (nodal points) at 
+        # t_save_left (last time step before t_save) and at t_save (user 
+        # defined time at which save spatial distribution). Values at t_save 
+        # are in general computed from linear interpolation of the data at 
+        # t_save_left and at t_save_right.
+        # Since the interpolation is carried out when time = t_save_right, 
+        # there is no need to store info at this time here and then perform the 
+        # interpolation: the interpolation is carried out directily exploiting 
+        # the available data.
+        store_sd_node = {
+            prop: dict(
+                t_save_left = np.zeros(N_nod),
+                t_save = np.zeros(N_nod),
+            ) for prop in prop_save_sd
+        }
+
+        return store_sd_node
+
 # End class FluidComponent.

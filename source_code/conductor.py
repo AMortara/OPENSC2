@@ -30,6 +30,7 @@ from conductor_flags import (
     ELECTRIC_TIME_STEP_NUMBER,
     VARIABLE_CONTACT_PERIMETER,
     CONSTANT_CONTACT_PERIMETER,
+    SHEET_NAME,
 )
 from fluid_component import FluidComponent
 from jacket_component import JacketComponent
@@ -37,13 +38,17 @@ from stack_component import StackComponent
 from strand_component import StrandComponent
 from strand_mixed_component import StrandMixedComponent
 from strand_stabilizer_component import StrandStabilizerComponent
+from simulation_global_info import DT_LABEL_SWITCH
 
 # import functions
 from utility_functions.auxiliary_functions import (
     check_repeated_headings,
     check_headers,
     check_object_number,
+    check_sheet_names,
     set_diagnostic,
+    interp_at_t_save,
+    load_auxiliary_files,
 )
 from utility_functions.electric_auxiliary_functions import (
     custom_current_function,
@@ -59,7 +64,6 @@ from utility_functions.initialization_functions import (
 from utility_functions.gen_flow import gen_flow
 from utility_functions.output import (
     save_properties,
-    save_convergence_data,
     save_geometry_discretization,
 )
 from utility_functions.plots import update_real_time_plots, create_legend_rtp
@@ -124,11 +128,11 @@ class Conductor:
         self.workbook_name = os.path.join(
             self.BASE_PATH, simulation.transient_input["MAGNET"]
         )
-        self.workbook_sheet_name = [sheet.title for sheet in sheetConductorsList]
+
         # Load the sheet CONDUCTOR_files form file conducor_definition.xlsx as a disctionary.
         self.file_input = pd.read_excel(
             self.workbook_name,
-            sheet_name=self.workbook_sheet_name[0],
+            sheet_name=SHEET_NAME["conductor_definition"].files,
             skiprows=2,
             header=0,
             index_col=0,
@@ -137,7 +141,7 @@ class Conductor:
         # Load the sheet CONDUCTOR_input form file conducor_definition.xlsx as a disctionary.
         self.inputs = pd.read_excel(
             self.workbook_name,
-            sheet_name=self.workbook_sheet_name[1],
+            sheet_name=SHEET_NAME["conductor_definition"].inputs,
             skiprows=2,
             header=0,
             index_col=0,
@@ -166,7 +170,7 @@ class Conductor:
         # Load the sheet CONDUCTOR_operation form file conducor_definition.xlsx as a disctionary.
         self.operations = pd.read_excel(
             self.workbook_name,
-            sheet_name=self.workbook_sheet_name[2],
+            sheet_name=SHEET_NAME["conductor_definition"].operation,
             skiprows=2,
             header=0,
             index_col=0,
@@ -279,6 +283,12 @@ class Conductor:
 
         # Dictionary declaration (cdp, 09/2020)
         self.inventory = dict()
+
+        # call method __initialize_attr_sd to initialize attributes useful to 
+        # deal with storage and saving of spatial distributions at user defined 
+        # times.
+        self.__initialize_attr_sd()
+
         # call method Conductor_components_instance to make instance of conductor components (cdp, 11/2020)
         # conductorlogger.debug(
         #     f"Before call method {self.conductor_components_instance.__name__}"
@@ -315,55 +325,128 @@ class Conductor:
     def __repr__(self):
         return f"{self.__class__.__name__}(Type: {self.KIND}, identifier: {self.identifier})"
     
+    def __initialize_attr_sd(self):
+        """Private method that initializes useful attributes used to deal with storage and savings of spatial distributions at user defined time.
+        Initialized attributes are:
+            * self.relevant_prop_sd
+            * self.header_sd
+            * self.relevant_prop_sd_num
+        """
+
+        self.relevant_prop_sd = dict(
+            # Collection of the relevant properties to be saved as spatial 
+            # distribution (nodal points) at user defined time steps.
+            node = dict(
+                FluidComponent = (
+                    "velocity",
+                    "pressure",
+                    "temperature",
+                    "total_density",
+                    "friction_factor",
+                ),
+                JacketComponent = ("temperature",),# this is a tuple
+                StrandStabilizerComponent = ("temperature",), # this is a tuple
+                # Update after instance of StrandMixedComponent
+                StrandMixedComponent = dict(),
+                # Update after instance of StackComponent
+                StackComponent = dict(),
+                Conductor = (
+                    "zcoord",
+                    "htc_ch_ch_open",
+                    "htc_ch_ch_close",
+                    "htc_ch_sol",
+                    "htc_sol_sol_cond",
+                    "htc_sol_sol_rad",
+                    "htc_env_sol_conv",
+                    "htc_env_sol_rad",
+                ),
+            ),
+            # Collection of the relevant properties to be saved as spatial 
+            # distribution (Gauss points) at user defined time steps.
+            gauss = dict(
+                SolidComponent = (
+                    "current_along",
+                    "delta_voltage_along",
+                    "linear_power_el_resistance",
+                ),
+                Conductor = (
+                    "zcoord_gauss",
+                    "heat_rad_jk",
+                    "heat_exchange_jk_env",
+                ),
+            )
+        )
+
+        self.header_sd = dict(
+            # Headers used in files of spatial distributions saved at user 
+            # defined time steps; relevant properties available in nodal points.
+            node = dict(
+                FluidComponent = "zcoord (m)\tvelocity (m/s)\tpressure (Pa)\ttemperature (K)\ttotal_density (kg/m^3)\tfriction_factor (~)",
+                JacketComponent = "zcoord (m)\ttemperature (K)",
+                StrandStabilizerComponent = "zcoord (m)\ttemperature (K)",
+                # Update after instance of StrandMixedComponent
+                StrandMixedComponent = dict(),
+                # Update after instance of StackComponent
+                StackComponent = dict(),
+            ),
+            gauss = "zcoord_gauss (m)\tcurrent_along (A)\tdelta_voltage_along (V)\tP_along (W/m)"
+        )
+
+        ready_keys = {
+            "FluidComponent",
+            "JacketComponent",
+            "StrandStabilizerComponent"
+        }
+        # Attribute that stores the number of relevant properties to be saved 
+        # at user defined time available in both node and Gauss points. +1 
+        # accounts for zcoord or zcoord_gauss. This quantities is used to 
+        # suitably initialize the number of colums in function 
+        # save_spatial_distribution.
+        self.relevant_prop_sd_num = dict(
+            node={
+                key: len(val) + 1 for key, val 
+                in self.relevant_prop_sd["node"].items() if key in ready_keys
+            },
+            gauss = len(self.relevant_prop_sd["gauss"]["SolidComponent"]) + 1
+        )
+
+        not_ready_keys = {
+            "StrandMixedComponent",
+            "StackComponent",
+        }
+        # Initialize empty dictionary in correspondence of not ready keys.
+        self.relevant_prop_sd_num["node"].update(
+            {key:dict() for key in not_ready_keys}
+        )
+
+        # Dictionary with prefix of the temporary files that store spatial 
+        # distributions of htc between conductor components.
+        self.file_htc_sd_pref = dict(
+            htc_ch_ch_open = "HTC_ch_ch_o",
+            htc_ch_ch_close = "HTC_ch_ch_c",
+            htc_ch_sol = "HTC_ch_sol",
+            htc_sol_sol_cond = "HTC_sol_sol_cond",
+            htc_sol_sol_rad = "HTC_sol_sol_rad",
+            htc_env_sol_conv = "HTC_env_sol_conv",
+            htc_env_sol_rad = "HTC_env_sol_rad",
+        )
+
+        # Dictionary with prefix of the temporary files that store spatial 
+        # distributions of heat exchanged between conductor components.
+        self.file_heat_sd_pref = dict(
+            heat_rad_jk = "Heat_rad_inner",
+            heat_exchange_jk_env = "Heat_exch_env",
+        )
+
     def __check_conductor_coupling(self:Self):
         """Private method that performs checks on user defined input file conductor_coupling.xlsx.
 
         Args:
             self (Self): conductor object."""
-        
-        self.__check_coupling_sheet_names()
+
         self.__check_thermal_contact_resistance_values()
         # Add call to methods that perform cheks on file
         # conductor_coupling.xlsx below.
-
-    def __check_coupling_sheet_names(self:Self):
-
-        """Private method that checks sheet names in input file conductor_coupling.xlsx.
-
-        Args:
-            self (Self): conductor object.
-
-        Raises:
-            KeyError: any of the sheet names in file conductor_coupling.xlsx is not consistent with the reference ones.
-        """
-
-        ref_sheet_names = {
-            "contact_perimeter_flag",
-            "contact_perimeter",
-            "HTC_choice",
-            "contact_HTC",
-            "thermal_contact_resistance",
-            "HTC_multiplier",
-            "electric_conductance_mode",
-            "electric_conductance",
-            "open_perimeter_fract",
-            "interf_thickness",
-            "trans_transp_multiplier",
-            "view_factors",
-            }
-        
-        wrong_sheet_names = list()
-
-        # Loop to check sheet names in input file conductor_coupling.xlsx.
-        for sheet_name in self.dict_df_coupling.keys():
-            if sheet_name not in ref_sheet_names:
-                wrong_sheet_names.append(sheet_name)
-
-        # Check if list wrong_sheet_names is not empty.
-        if wrong_sheet_names:
-            # Found not consisten sheet names in file conductor_coupling.xlsx: 
-            # raise ValueError.
-            raise ValueError(f"Found not valid sheets name in input file {self.file_input['STRUCTURE_COUPLING']}.List of not valid sheet names:{wrong_sheet_names}\nlist of valid sheet names:\n{ref_sheet_names}")
 
     def __check_thermal_contact_resistance_values(self:Self):
 
@@ -692,12 +775,15 @@ class Conductor:
         # Load workbook conductor_operation.xlsx.
         wb_operations = load_workbook(dict_file_path["operation"], data_only=True)
 
+        # Alias for the sheet names in file conductor_input.xlsx
+        cond_input_names = SHEET_NAME["conductor_input"]
+
+        check_sheet_names(cond_input_names,wb_input.sheetnames,dict_file_path["input"])
+
         listOfComponents = wb_input.get_sheet_names()
-        self.inventory["FluidComponent"] = ComponentCollection("CHAN")
-        self.inventory["StrandMixedComponent"] = ComponentCollection("STR_MIX")
-        self.inventory["StrandStabilizerComponent"] = ComponentCollection("STR_STAB")
-        self.inventory["StackComponent"] = ComponentCollection("STACK")
-        self.inventory["JacketComponent"] = ComponentCollection("Z_JACKET")
+        for field, val in zip(cond_input_names._fields,cond_input_names):
+            self.inventory[field] = ComponentCollection(val)
+
         self.inventory["StrandComponent"] = ComponentCollection()
         self.inventory["SolidComponent"] = ComponentCollection()
         self.inventory["all_component"] = ComponentCollection()
@@ -726,7 +812,7 @@ class Conductor:
             )
             kindObj = sheet.cell(row=1, column=1).value  # sheet["A1"].value
             numObj = int(sheet.cell(row=1, column=2).value)  # sheet["B1"].value
-            if kindObj == "CHAN":
+            if kindObj == cond_input_names.FluidComponent:
                 # Assign the total number of defined FluidComponent object to
                 # attribute number of object ComponentCollection.
                 self.inventory["FluidComponent"].number = numObj
@@ -735,13 +821,18 @@ class Conductor:
                     # objects;
                     # ["all_component"].collection list of all objects
                     self.inventory["FluidComponent"].collection.append(
-                        FluidComponent(sheet, sheetOpar, ii, dict_file_path)
+                        FluidComponent(
+                            sheet,
+                            sheetOpar,
+                            ii,
+                            dict_file_path,
+                        )
                     )
                     self.inventory["all_component"].collection.append(
                         self.inventory["FluidComponent"].collection[ii - 1]
                     )
                 # end for ii (cdp, 09/2020)
-            elif kindObj == "STACK":
+            elif kindObj == cond_input_names.StackComponent:
                 # Assign the total number of defined StackComponent object to
                 # attribute number of object ComponentCollection.
                 self.inventory["StackComponent"].number = numObj
@@ -766,7 +857,7 @@ class Conductor:
                         self.inventory["StackComponent"].collection[ii - 1]
                     )
                 # end for ii (cdp, 09/2020)
-            elif kindObj == "STR_MIX":
+            elif kindObj == cond_input_names.StrandMixedComponent:
                 # Assign the total number of defined StrandMixedComponent object to
                 # attribute number of object ComponentCollection.
                 self.inventory["StrandMixedComponent"].number = numObj
@@ -791,7 +882,7 @@ class Conductor:
                         self.inventory["StrandMixedComponent"].collection[ii - 1]
                     )
                 # end for ii (cdp, 09/2020)
-            elif kindObj == "STR_STAB":
+            elif kindObj == cond_input_names.StrandStabilizerComponent:
                 # Assign the total number of defined StrandStabilizerComponent object to
                 # attribute number of object ComponentCollection.
                 self.inventory["StrandStabilizerComponent"].number = numObj
@@ -816,7 +907,7 @@ class Conductor:
                         self.inventory["StrandStabilizerComponent"].collection[ii - 1]
                     )
                 # end for ii (cdp, 09/2020)
-            elif kindObj == "Z_JACKET":
+            elif kindObj == cond_input_names.JacketComponent:
                 # Assign the total number of defined JacketComponent object to
                 # attribute number of object ComponentCollection.
                 self.inventory["JacketComponent"].number = numObj
@@ -1030,6 +1121,14 @@ class Conductor:
             ValueError: raise error if time values in sheet Spatial_distribution of file conductor diagnostic are larger than the end time of the simulation.
         """
 
+        # Set the initial value of the conductor time step for 
+        # thermal-hydraulic solution to the user defined time step. In case of 
+        # adaptive time step, function get_time_step is called in method 
+        # simulation.conductor_solution after call to function step to update 
+        # the value of the next time at which the thermal-hydraulic solution 
+        # should be computed.
+        self.time_step = simulation.transient_input["TIME_STEP"]
+        
         self.dict_topology = dict()  # dictionary declaration (cdp, 09/2020)
         self.dict_interf_peri = dict()  # dictionary declaration (cdp, 07/2020)
         # Call method Get_conductor_topology to evaluate conductor topology: \
@@ -1143,6 +1242,12 @@ class Conductor:
         self.i_save = 0
         # list of number of time steps at wich save the spatial discretization
         self.num_step_save = np.zeros(self.Space_save.shape, dtype=int)
+        self.i_save_max = len(self.Space_save) - 1
+
+        self.__get_cost_and_var_htc_interfaces(simulation)
+        
+        self.__initialize_store_sd()
+
         # Load the content of column self.identifier of sheet Time in file conductors_disgnostic.xlsx as a series and convert to numpy array of float.
         self.Time_save = (
             pd.read_excel(
@@ -1167,6 +1272,13 @@ class Conductor:
                 f"File {self.file_input['OUTPUT']}, sheet Time, conductor {self.identifier}: impossible to save time evolutions at axial coordinate {self.Time_save.max()} s since it is ouside the computational domain of the simulation [0, {self.inputs['ZLENGTH']}] m.\n"
             )
         # End if self.Time_save.max() > self.inputs["ZLENGTH"]
+
+        # Initialize attributes events_time, i_event and i_event_max
+        self.__collect_event_time(simulation)
+        ## Attributes to deal with adaptive time step
+        self.appended_time_flag = False
+        self.next_time_step = 0.0
+        self.force_next_tstep_flag = False
 
         # declare dictionaries to store Figure and axes objects to constructi real \
         # time figures (cdp, 10/2020)
@@ -3757,7 +3869,7 @@ class Conductor:
 
         if mode!= SELF_INDUCTANCE_MODE_0 and mode != SELF_INDUCTANCE_MODE_1 and mode != SELF_INDUCTANCE_MODE_2:
             raise ValueError(
-                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {SHEET_NAME['conductor_definition'].operation} in file {self.workbook_name}.\n"
             )
         ABSTOL = 1e-6
         lmod = (
@@ -4058,7 +4170,7 @@ class Conductor:
         
         if mode!= SELF_INDUCTANCE_MODE_0 and mode != SELF_INDUCTANCE_MODE_1 and mode != SELF_INDUCTANCE_MODE_2:
             raise ValueError(
-                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+                f"{self.identifier}\nArgument 'mode' must be equal to {SELF_INDUCTANCE_MODE_0 = } or to {SELF_INDUCTANCE_MODE_1 = } or to {SELF_INDUCTANCE_MODE_2 = }. Current value {mode = } is not allowed. Please check sheet {SHEET_NAME['conductor_definition'].operation} in file {self.workbook_name}.\n"
             )
 
         ll = (
@@ -4229,7 +4341,7 @@ class Conductor:
             and self.operations["INDUCTANCE_MODE"] != APPROXIMATE_INDUCTANCE
         ):
             raise ValueError(
-                f"{self.identifier = }\nArgument self.operations['INDUCTANCE_MODE'] should be equal to {CONSTANT_INDUCTANCE = } or {APPROXIMATE_INDUCTANCE = } or {ANALYTICAL_INDUCTANCE = }. Current value ({self.operations['INDUCTANCE_MODE'] = }) is not allowed. Please check {self.workbook_sheet_name[2]} in file {self.workbook_name}.\n"
+                f"{self.identifier = }\nArgument self.operations['INDUCTANCE_MODE'] should be equal to {CONSTANT_INDUCTANCE = } or {APPROXIMATE_INDUCTANCE = } or {ANALYTICAL_INDUCTANCE = }. Current value ({self.operations['INDUCTANCE_MODE'] = }) is not allowed. Please check {SHEET_NAME['conductor_definition'].operation} in file {self.workbook_name}.\n"
             )
 
         inductance_switch = {
@@ -4321,6 +4433,12 @@ class Conductor:
                 ii :: self.inventory["StrandComponent"].number
             ]
 
+            # Extrapolate the current at the nodes. This is useful for 
+            # correctly estimating the current sharing temperature by using the 
+            # current actually carried by the current carrier components. 
+            # (Prior to these changes, the input current was used, but this 
+            # could lead to over- or underestimation of the current sharing
+            #  temperature.)
             obj.dict_node_pt["current_along"] = np.interp(
                         self.grid_features["zcoord"],
                         self.grid_features["zcoord_gauss"],
@@ -4891,9 +5009,9 @@ class Conductor:
                     strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity_not_sc(
                             strand.dict_node_pt
                         )
-                elif isinstance(strand, StackComponent):
-                    strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.stack_electrical_resistivity_not_sc(
-                        strand.dict_Gauss_pt
+                elif isinstance(strand,StackComponent):
+                    strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.stack_electrical_resistivity_not_sc(
+                            strand.dict_node_pt
                         )
                 elif isinstance(strand, StrandStabilizerComponent):
                     strand.dict_node_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity(
@@ -4989,6 +5107,10 @@ class Conductor:
                     strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.stack_electrical_resistivity_not_sc(
                         strand.dict_Gauss_pt
                         )
+                elif isinstance(strand, StackComponent):
+                    strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.stack_electrical_resistivity_not_sc(
+                        strand.dict_Gauss_pt
+                        )
                 elif isinstance(strand, StrandStabilizerComponent):
                     strand.dict_Gauss_pt["electrical_resistivity_stabilizer"] = strand.strand_electrical_resistivity(
                             strand.dict_Gauss_pt
@@ -5050,19 +5172,6 @@ class Conductor:
         # call method Mass_Energy_balance to get data for the space convergence \
         # (cdp, 09/2020)
         self.mass_energy_balance(simulation)
-        # call function Save_convergence_data to save solution spatial \
-        # distribution at TEND, together with the mass and energy balance results, \
-        # to make the space convergence analisys (cdp, 12/2020)
-        save_convergence_data(self, simulation.dict_path["Space_conv_output_dir"])
-        # call function Save_convergence_data to save solution spatial \
-        # distribution at TEND, together with the mass and energy balance results \
-        # to make the time convergence analisys (cdp, 12/2020)
-        save_convergence_data(
-            self,
-            simulation.dict_path["Time_conv_output_dir"],
-            abs(simulation.n_digit_time),
-            space_conv=False,
-        )
 
     # end Post_processing
 
@@ -5937,3 +6046,812 @@ class Conductor:
         )
 
         # End method load_user_defined_quantity.
+
+    def __store_sd_components(self, t_save_key:str="t_save_left"):
+        """Private method that stores spatial distribution values of selected properties of conductor components in datastructure store_sd_node and store_sd_gauss.
+        With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
+
+        Args:
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save_left".
+        """
+        
+        # Loop on FluidComponent to store spatial distribution of selected 
+        # variables in nodal points.
+        for obj in self.inventory["FluidComponent"].collection:
+            for key in obj.store_sd_node.keys():
+                if key != "friction_factor":
+                    obj.store_sd_node[key][t_save_key] = (
+                        obj.coolant.dict_node_pt[key]
+                    )
+                else:
+                    obj.store_sd_node[key][t_save_key] = (
+                        obj.channel.dict_friction_factor[True]["total"]
+                    )
+
+        # Loop on SolidComponent to store spatial distribution of selected 
+        # variables in nodal points.
+        for obj in self.inventory["SolidComponent"].collection:
+            for key in obj.store_sd_node.keys():
+                obj.store_sd_node[key][t_save_key] = obj.dict_node_pt[key]
+
+        # Loop on SolidComponent to store spatial distribution of selected 
+        # variables in Gauss points.
+        for obj in self.inventory["SolidComponent"].collection:
+            for key in obj.store_sd_gauss.keys():
+                if key == "linear_power_el_resistance":
+                    vv = obj.dict_Gauss_pt[key][:, 0]
+                else:
+                    vv = obj.dict_Gauss_pt[key]
+                obj.store_sd_gauss[key][t_save_key] = vv
+
+    def __store_sd_htc_conductor(
+        self,
+        interfaces:dict,
+        t_save_key:str="t_save_left"
+        ):
+        """Private method that stores spatial distribution values of heat transfer coefficients between conductor components in datastructure store_sd_node.
+        With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
+        The interfaces arguments allows to distinguish between costant htc and variable (computed by the software) htc. The costant htc will not be interpolated with method store_interp_spatial_distributions.
+
+        Args:
+            interfaces (dict): dictionary that collects interfaces identifiers for all the possible interfaces bewteen conductor components as collected in attributes self.variable_htc_interf and self.costant_htc_interf. It allows to distinguish between costant htc and variable (computed by the software) htc.
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save_left".
+        """
+
+        for interf_id in interfaces["htc_ch_ch_open"]:
+            self.store_sd_node["htc_ch_ch_open"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["ch_ch"]["Open"][interf_id]
+            )
+
+        for interf_id in interfaces["htc_ch_ch_close"]:
+            self.store_sd_node["htc_ch_ch_close"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["ch_ch"]["Close"][interf_id]
+            )
+        
+        for interf_id in interfaces["htc_ch_sol"]:
+            self.store_sd_node["htc_ch_sol"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["ch_sol"][interf_id]
+            )
+        for interf_id in interfaces["htc_sol_sol_cond"]:
+            self.store_sd_node["htc_sol_sol_cond"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["sol_sol"]["cond"][interf_id]
+            )
+        
+        for interf_id in interfaces["htc_sol_sol_rad"]:
+            self.store_sd_node["htc_sol_sol_rad"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["sol_sol"]["rad"][interf_id]
+            )
+        
+        for interf_id in interfaces["htc_env_sol_conv"]:
+            self.store_sd_node["htc_env_sol_conv"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["env_sol"][interf_id]["conv"]
+            )
+        
+        for interf_id in interfaces["htc_env_sol_rad"]:
+            self.store_sd_node["htc_env_sol_rad"][t_save_key][interf_id] = (
+                self.dict_node_pt["HTC"]["env_sol"][interf_id]["rad"]
+            )
+
+    def __store_sd_conductor(self, t_save_key:str="t_save_left"):
+        """Private method that stores spatial distribution values of the mesh and of the heat exchanged by conductor components datastructure store_sd_node and store_sd_gauss.
+        With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
+
+        Args:
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save_left".
+        """
+
+        self.store_sd_node["zcoord"][t_save_key] = self.grid_features["zcoord"]
+        
+        self.store_sd_gauss["zcoord_gauss"][t_save_key] = (
+            self.grid_features["zcoord_gauss"]
+        )
+        self.store_sd_gauss["heat_rad_jk"][t_save_key] = self.heat_rad_jk
+        self.store_sd_gauss["heat_exchange_jk_env"][t_save_key] = (
+            self.heat_exchange_jk_env
+        )
+
+    def store_spatial_distributions_t0(self,t_save_key:str="t_save"):
+        """Method that stores spatial distribution values of selected quantities in datastructure store_sd_node and store_sd_gauss at t = 0 s.
+        These quantities are listed in attribute self.relevant_prop_sd.
+
+        Args:
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save".
+        """
+
+        self.__store_sd_components(t_save_key)
+        self.__store_sd_conductor(t_save_key)
+        # Costant vales of the htc are stored directy in keyword t_save since 
+        # there is no need for linear interpolation. These values will be no 
+        # longer updated during the simulation
+        self.__store_sd_htc_conductor(self.costant_htc_intef,t_save_key)
+        self.__store_sd_htc_conductor(self.variable_htc_intef,t_save_key)
+
+    def store_spatial_distributions(self, t_save_key:str="t_save_left"):
+        """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss.
+        These quantities are listed in attributes self.relevant_prop_sd.
+        With this stored information at t_save_left the code will perform a linear interpolation to compute the values at t_save (user selected time to save spatial distributions).
+
+        Args:
+            t_save_key (str, optional): keyord to store the spatial distribution values at the correct time step. Valid values t_save_left, t_save. Defaults to "t_save_left".
+        """
+
+        # Store spatial distribution of conductor component properties in the 
+        # selected keyword (t_save_key). These stored values will be used to 
+        # evaluate the value of the properties at the user defined time step to 
+        # save spatial distributions.
+        self.__store_sd_components(t_save_key)
+        # Store spatial distribution of conductor quantities (mesh and heat 
+        # exchanged between conductor components) in the selected keyword 
+        # (t_save_key). These stored values will be used to evaluate the value 
+        # of the quantities at the user defined time step to save spatial 
+        # distributions.
+        self.__store_sd_conductor(t_save_key)
+        # Store spatial distributions of the variable htc between conductor 
+        # componetns in the selected keyword (t_save_key). These stored values 
+        # will be used to evaluate the value of the htc at the user defined 
+        # time step to save spatial distributions.
+        self.__store_sd_htc_conductor(self.variable_htc_intef,t_save_key)
+
+
+    def store_interp_spatial_distributions(self):
+        """Method that stores spatial distribution values of selected properties in datastructure store_sd_node and store_sd_gauss at time t_save.
+        The values are computed by means of linear interpolation calling function interp_at_t_save.
+        """
+
+        # Alias
+        tt = self.Space_save[self.i_save]
+        t1 = self.t_save_left
+        t2 = self.t_save_right
+
+        self.store_sd_node["zcoord"]["t_save"] = interp_at_t_save(
+            tt,
+            t1,
+            t2,
+            self.store_sd_node["zcoord"]["t_save_left"],
+            self.grid_features["zcoord"],
+        )
+
+        for interf_id in self.variable_htc_intef["htc_ch_ch_open"]:
+            self.store_sd_node["htc_ch_ch_open"]["t_save"][interf_id] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_ch_ch_open"]["t_save_left"][interf_id],
+                    self.dict_node_pt["HTC"]["ch_ch"]["Open"][interf_id],
+                )
+            )
+
+        for interf_id in self.variable_htc_intef["htc_ch_ch_close"]:
+            self.store_sd_node["htc_ch_ch_close"]["t_save"][interf_id] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_ch_ch_open"]["t_save_left"][interf_id],
+                    self.dict_node_pt["HTC"]["ch_ch"]["Close"][interf_id],
+                )
+            )
+        
+        for interf_id in self.variable_htc_intef["htc_ch_sol"]:
+            self.store_sd_node["htc_ch_sol"]["t_save"][interf_id] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_ch_sol"]["t_save_left"][interf_id],
+                    self.dict_node_pt["HTC"]["ch_sol"][interf_id],
+                )
+            )
+        
+        for interf_id in self.variable_htc_intef["htc_sol_sol_cond"]:
+            self.store_sd_node["htc_sol_sol_cond"]["t_save"][interf_id] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_sol_sol_cond"]["t_save_left"][interf_id],
+                    self.dict_node_pt["HTC"]["sol_sol"]["cond"][interf_id],
+                )
+            )
+        
+        for interf_id in self.variable_htc_intef["htc_sol_sol_rad"]:
+            self.store_sd_node["htc_sol_sol_rad"]["t_save"][interf_id] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_node["htc_sol_sol_rad"]["t_save_left"][interf_id],
+                    self.dict_node_pt["HTC"]["sol_sol"]["rad"][interf_id],
+                )
+            )
+
+        self.store_sd_gauss["zcoord_gauss"]["t_save"] = interp_at_t_save(
+            tt,
+            t1,
+            t2,
+            self.store_sd_gauss["zcoord_gauss"]["t_save_left"],
+            self.grid_features["zcoord_gauss"],
+        )
+        
+        for kk,vv in self.heat_rad_jk.items():
+            self.store_sd_gauss["heat_rad_jk"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_gauss["heat_rad_jk"]["t_save_left"][kk],
+                    vv,
+                )
+            )
+
+        for kk,vv in self.heat_exchange_jk_env.items():
+            self.store_sd_gauss["heat_exchange_jk_env"]["t_save"][kk] = (
+                interp_at_t_save(
+                    tt,
+                    t1,
+                    t2,
+                    self.store_sd_gauss["heat_exchange_jk_env"][
+                        "t_save_left"][kk],
+                    vv,
+                )
+            )
+        
+        # Loop on FluidComponent to interpolate and store spatial distribution 
+        # of selected variables in nodal points.
+        for obj in self.inventory["FluidComponent"].collection:
+            for key in obj.store_sd_node.keys():
+                if key != "friction_factor":
+                    obj.store_sd_node[key]["t_save"] = interp_at_t_save(
+                        tt,
+                        t1,
+                        t2,
+                        obj.store_sd_node[key]["t_save_left"],
+                        obj.coolant.dict_node_pt[key],
+                    )
+                else:
+                    obj.store_sd_node[key]["t_save"] = interp_at_t_save(
+                        tt,
+                        t1,
+                        t2,
+                        obj.store_sd_node[key]["t_save_left"],
+                        obj.channel.dict_friction_factor[True]["total"]
+                    )
+
+        # Loop on SolidComponent to interpolate and store spatial distribution 
+        # of selected variables in nodal points.
+        for obj in self.inventory["SolidComponent"].collection:
+            for key in obj.store_sd_node.keys():
+                obj.store_sd_node[key]["t_save"] = interp_at_t_save(
+                        tt,
+                        t1,
+                        t2,
+                        obj.store_sd_node[key]["t_save_left"],
+                        obj.dict_node_pt[key],
+                    )
+
+        # Loop on SolidComponent to interpolate and store spatial distribution 
+        # of selected variables in Gauss points.
+        for obj in self.inventory["SolidComponent"].collection:
+            for key in obj.store_sd_gauss.keys():
+                if key == "linear_power_el_resistance":
+                    vv = obj.dict_Gauss_pt[key][:, 0]
+                else:
+                    vv = obj.dict_Gauss_pt[key]
+                obj.store_sd_gauss[key]["t_save"] = interp_at_t_save(
+                        tt,
+                        t1,
+                        t2,
+                        obj.store_sd_gauss[key]["t_save_left"],
+                        vv,
+                    )
+
+    def __initialize_store_sd(self):
+        """Private method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
+        t_save_left (last time step before t_save) and at t_save (user defined time at which save spatial distribution).
+        Attributes store_sd_node and store_sd_gauss are available not only for the class Conductor, but also for the classes FluidComponent, JacketComponent, StackComponent, StrandMixedComponent and StrandStabilizerComponent and are initialized calling method initialize_store_sd of these classes. Class FluidComponent does not have attribute store_sd_gauss.
+        In this method is also finalized the initialization of attributes self.relevant_prop_sd, self.header_sd and self.relevant_prop_sd_num of class Conductor.
+        """
+
+        # Alias
+        N_nod = self.grid_features["N_nod"]
+        N_elem = self.grid_input["NELEMS"]
+        prop_gauss = self.relevant_prop_sd["gauss"]["SolidComponent"]
+
+        self.store_sd_node = dict()
+        self.store_sd_gauss = dict()
+
+        # No need to have also t_save_right since all info at this time step 
+        # are already available as the solution of the problem, so the linear 
+        # interpolation is performed directly with this info.
+        self.store_sd_node["zcoord"] = dict(
+            t_save_left = np.zeros(N_nod),
+            t_save = np.zeros(N_nod),
+        )
+        # Start from the second element (index 1) because "zcoord" is 
+        # initialized before
+        for prop in self.relevant_prop_sd["node"]["Conductor"][1:]:
+            self.store_sd_node[prop] = dict(
+                t_save_left = dict(),
+                t_save = dict(),
+            )
+        
+        self.store_sd_gauss["zcoord_gauss"] = dict(
+            t_save_left = np.zeros(N_elem),
+            t_save = np.zeros(N_elem),
+        )
+        for prop in self.relevant_prop_sd["gauss"]["Conductor"][1:]:
+            self.store_sd_gauss[prop] = dict(
+                t_save_left = dict(),
+                t_save = dict(),
+            )
+
+        # Data structure that stores spatial distribution at t_save_left (last 
+        # time step before t_save), at t_save_right (first time step after 
+        # t_save) and at t_save (user defined time at which save spatial 
+        # distribution). Values at t_save are in general computed from linear 
+        # interpolation of the data at t_save_left and at t_save_right.
+        for obj in self.inventory["FluidComponent"].collection:
+            obj.store_sd_node = obj.initialize_store_sd(N_nod)
+
+        class_name = ("StackComponent","StrandMixedComponent")
+        for name in class_name:
+            # Data structure that stores spatial distribution at t_save_left 
+            # (last time step before t_save), at t_save_right (first time step 
+            # after t_save) and at t_save (user defined time at which save 
+            # spatial distribution). Values at t_save are in general computed 
+            # from linear interpolation of the data at t_save_left and at 
+            # t_save_right.
+            for obj in self.inventory[name].collection:
+                obj_id = obj.identifier
+                (
+                    # Finalize the initialization of attribute 
+                    # relevant_prop_node. This is done to allow the user to 
+                    # choose whether or not to compute (and store) the current 
+                    # sharing temperature at each thermal hydraulic time step.
+                    self.relevant_prop_sd["node"][name][obj_id],
+                    obj.store_sd_node,
+                    obj.store_sd_gauss,
+                ) = obj.initialize_store_sd(N_nod,N_elem,prop_gauss)
+
+                if obj.operations["TCS_EVALUATION"]:
+                    self.header_sd["node"][name][obj_id] = "zcoord (m)\ttemperature (K)\tcurrent_sharing_temperature (K)\tcritical_current_density (A/m^2)"
+                else:
+                    self.header_sd["node"][name][obj_id] = "zcoord (m)\ttemperature (K)\tcritical_current_density (A/m^2)"
+                # Finalinze initialization of attribute relevant_prop_sd_num; 
+                # +1 accounts for zcoord.
+                self.relevant_prop_sd_num["node"][name][obj_id] = (
+                    1 + len(self.relevant_prop_sd["node"][name][obj_id])
+                )
+
+        class_name = ("JacketComponent","StrandStabilizerComponent")
+        for name in class_name:
+            # Data structure that stores spatial distribution at t_save_left 
+            # (last time step before t_save), at t_save_right (first time step 
+            # after t_save) and at t_save (user defined time at which save 
+            # spatial distribution). Values at t_save are in general computed 
+            # from linear interpolation of the data at t_save_left and at 
+            # t_save_right.
+            for obj in self.inventory[name].collection:
+                (
+                    _,
+                    obj.store_sd_node,
+                    obj.store_sd_gauss
+                ) = obj.initialize_store_sd(N_nod,N_elem,prop_gauss)
+
+    def __get_cost_and_var_htc_interfaces(self, simulation):
+        """Private method that identifies all the interfaces between conductor components that are characterized by a variable heat transfer coefficient (computed by the software) or by a costant heat transfer coefficient and saves them in attributes variable_htc_interf and constant_htc_interf respectively. These attributes are dictionaries with the following keywords:
+
+            * htc_ch_ch_open,
+            * htc_ch_ch_close,
+            * htc_ch_sol,
+            * htc_sol_sol_cond,
+            * htc_sol_sol_rad,
+            * htc_env_sol_conv,
+            * htc_env_sol_rad.
+
+        To each key corresponds a tuple with the interface names.
+        These attributes are used to make interpolation only of the variable heat transfer coefficients while saving spatial distributions at user defined time steps.
+
+        Args:
+            simulation (object): object with all information about the simulation.
+        """
+
+        # Alias
+        interf_flag = self.dict_df_coupling["contact_perimeter_flag"]
+        
+        # Initialize attribute variable_htc_interf keys to empty list whith 
+        # dictionary comprehension. Start from second item (index 1) because 
+        # "zcoord" is not related to heat transfer coefficients
+        self.variable_htc_intef = {
+            key:[] for key in self.relevant_prop_sd["node"]["Conductor"][1:]
+        }
+
+        # Initialize attribute costant_htc_interf keys to empty list whith 
+        # dictionary comprehension. Start from second item (index 1) because 
+        # "zcoord" is not related to heat transfer coefficients
+        self.costant_htc_intef = {
+            key:[] for key in self.relevant_prop_sd["node"]["Conductor"][1:]
+        }
+
+        for rr, fluid_comp_r in enumerate(self.inventory["FluidComponent"].collection):
+            # Read the submatrix containing information about channel - solid 
+            # objects iterfaces.
+            # Nested loop on channel - solid objects
+            for s_comp in self.inventory["SolidComponent"].collection:
+                # Rationale: append item to the list only if there is a 
+                # interface characterized by a variable heat transfer 
+                # coefficient.
+                flag_interf = abs(interf_flag.at[
+                        fluid_comp_r.identifier, s_comp.identifier
+                    ]
+                )
+                if flag_interf == 1:
+                    flag_coupling = self.dict_df_coupling["HTC_choice"].at[
+                        fluid_comp_r.identifier, s_comp.identifier
+                    ]
+                    interf_id = self.dict_topology["ch_sol"][
+                        fluid_comp_r.identifier][
+                        s_comp.identifier
+                    ]
+                    if flag_coupling == 2:
+                        self.variable_htc_intef["htc_ch_sol"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == -2:
+                        self.costant_htc_intef["htc_ch_sol"].append(
+                            interf_id
+                        )
+
+            # Nested loop on channel - channel objects
+            for _, fluid_comp_c in enumerate(
+                self.inventory["FluidComponent"].collection[rr + 1 :]
+            ):
+                flag_interf = abs(interf_flag.at[
+                        fluid_comp_r.identifier, fluid_comp_c.identifier
+                    ]
+                )
+                if flag_interf == 1:
+                    flag_coupling = self.dict_df_coupling["HTC_choice"].at[
+                        fluid_comp_r.identifier, fluid_comp_c.identifier
+                    ]
+                    # Construct interface name: it can be found also in 
+                    # dict_topology["ch_ch"] but a search in dictionaties 
+                    # "Hydraulic_parallel" and "Thermal_contact" should be 
+                    # performed; it is simpler to construct interface names 
+                    # combining channels identifier.
+                    interf_id = f"{fluid_comp_r.identifier}_{fluid_comp_c.identifier}"
+                    if flag_coupling == 2:
+                        # Heat transfer by convection.
+                        self.variable_htc_intef["htc_ch_ch_close"].append(
+                            interf_id
+                        )
+                        self.variable_htc_intef["htc_ch_ch_open"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == -2:
+                        # Heat transfer by convection.
+                        self.costant_htc_intef["htc_ch_ch_close"].append(
+                            interf_id
+                        )
+                        self.costant_htc_intef["htc_ch_ch_open"].append(
+                            interf_id
+                        )
+        # end for loop rr
+
+        # Nested loop on solid - solid objects
+        for rr, s_comp_r in enumerate(
+            self.inventory["SolidComponent"].collection
+        ):
+            for _, s_comp_c in enumerate(
+                self.inventory["SolidComponent"].collection[rr + 1 :]
+            ):
+                flag_interf = abs(interf_flag.at[
+                            s_comp_r.identifier, s_comp_c.identifier
+                        ]
+                    )
+                if flag_interf == 1:
+                    flag_coupling = self.dict_df_coupling["HTC_choice"].at[
+                            s_comp_r.identifier, s_comp_c.identifier
+                        ]
+                    interf_id = self.dict_topology["sol_sol"][
+                        s_comp_r.identifier][
+                        s_comp_c.identifier
+                    ]
+                    if flag_coupling == 1:
+                        # Heat transfer by conduction.
+                        self.variable_htc_intef["htc_sol_sol_cond"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == -1:
+                        # Heat transfer by conduction.
+                        self.costant_htc_intef["htc_sol_sol_cond"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == 3:
+                        # Heat transfer by radiation.
+                        self.variable_htc_intef["htc_sol_sol_rad"].append(
+                            interf_id
+                        )
+                    elif flag_coupling == -3:
+                        # Heat transfer by radiation.
+                        self.costant_htc_intef["htc_sol_sol_rad"].append(
+                            interf_id
+                        )
+            # end for loop cc
+
+            key = f"{simulation.environment.KIND}_{s_comp_r.identifier}"
+
+            flag_interf = abs(interf_flag.at[
+                    simulation.environment.KIND, s_comp_r.identifier
+                ]
+            )
+            if flag_interf == 1:
+                flag_coupling = self.dict_df_coupling["HTC_choice"].at[
+                            simulation.environment.KIND, s_comp_r.identifier
+                        ]
+                if flag_coupling == 2:
+                    # Heat transfer by convection.
+                    self.variable_htc_intef["htc_env_sol_conv"].append(key)
+                elif flag_coupling == -2:
+                    # Heat transfer by convection.
+                    self.costant_htc_intef["htc_env_sol_conv"].append(key)
+
+                if (flag_coupling == 3 or flag_coupling == 4):
+                    # Heat tranfer by radiation (|flag_coupling| = 3) or by 
+                    # radiation and convection (|flag_coupling| = 4).
+                    self.variable_htc_intef["htc_env_sol_rad"].append(key)
+                elif flag_coupling == -3 or flag_coupling == -4:
+                    # Heat tranfer by radiation (|flag_coupling| = 3) or by 
+                    # radiation and convection (|flag_coupling| = 4).
+                    self.costant_htc_intef["htc_env_sol_rad"].append(key)
+        # end for loop rr
+
+        # Convert list into tuple to have an immutable collection of interfaces 
+        # identifiers.
+        self.variable_htc_intef = {
+            key:tuple(val) for key,val in self.variable_htc_intef.items()
+        }
+
+        # Convert list into tuple to have an immutable collection of interfaces 
+        # identifiers.
+        self.costant_htc_intef = {
+            key:tuple(val) for key,val in self.costant_htc_intef.items()
+        }
+
+    def __collect_event_time(self,simulation):
+        """Private method that collects the user defined times at which events (like heating and current variation) should occur in a numpy array. The numpy array is stored as attribute of the conductor. The method defines the following conductor attributes:
+            * events_time: unique and sorted np array with all the times at which events occur;
+            * i_event: counter of the event;
+            * i_event_max: maximum allowed value to i_event.
+
+        Args:
+            simulation (simulation): simulation object with all the info of the simulation.
+
+        Raises:
+            NotImplementedError: if obj.operations["IQFUN"] -> heating from user defined function.
+            NotImplementedError: if self.inputs["I0_OP_MODE"] -> current from user defined function.
+        """
+
+        # Switch to select the correct path 
+        file_path_witch = dict(
+            heat_main = os.path.join(
+                self.BASE_PATH, self.file_input["OPERATION"]
+            ),
+            heat_aux = os.path.join(
+                self.BASE_PATH, self.file_input["EXTERNAL_HEAT"]
+            ),
+            current_aux = os.path.join(
+                self.BASE_PATH, self.file_input["EXTERNAL_CURRENT"]
+            ),
+        )
+
+        keys = ("TQBEG","TQEND")
+
+        # Collect the times of the events (heating) when IQFUN = 1 (heating is 
+        # set up in input file conductor_operation.xlsx). The order is first 
+        # all TQBEG values than all TQEND values. Order is important as will 
+        # affect the behaviour of method self.__check_event_time_main_input.
+        event_list = [
+            obj.operations[key] for key in keys for obj in self.inventory["SolidComponent"].collection if obj.operations["IQFUN"] == 1
+        ]
+
+        # Get the path to input file conductor_operation.xlsx.
+        heat_main_path = file_path_witch["heat_main"]
+        # Check if selected time step or minimum time step is too large to 
+        # discretize each heating period in input file conductor_operation.xlsx.
+        self.__check_event_time_main_input(event_list,simulation,heat_main_path)
+
+        # Convert list to np array
+        self.events_time = np.array(event_list)
+
+        # Loop on SolidComponent to deal with auxiliary input files (if any).
+        for obj in self.inventory["SolidComponent"].collection:
+            if obj.operations["IQFUN"] == -1:
+                # Get the event times stored in each sheet of auxiliary input 
+                # file for heating. The function check that user suitably 
+                # defined a time step/ minimum time step and appends the values 
+                # at the end of np array event_aux.
+                self.events_time = self.__collect_event_time_aux_input(
+                    obj.identifier,
+                    simulation,
+                    file_path_witch["heat_aux"],
+                )
+            elif obj.operations["IQFUN"] == -2:
+                raise NotImplementedError("A way to deal with flag IQFUN = -2 should still be implemented.")
+            if (
+                self.inputs["I0_OP_MODE"] == IOP_FROM_FILE
+                and obj.operations["IOP_MODE"] == -1
+                ):
+                # Get the event times stored in each sheet of auxiliary input 
+                # file for current. The function check that user suitably 
+                # defined a time step/minimum time step and appends the values 
+                # at the end of np array event_aux.
+                self.events_time = self.__collect_event_time_aux_input(
+                    obj.identifier,
+                    simulation,
+                    file_path_witch["current_aux"],
+                )
+            elif self.inputs["I0_OP_MODE"] == IOP_FROM_EXT_FUNCTION:
+                raise NotImplementedError("A way to deal with flag I0_OP_MODE = -2 should still be implemented.")
+
+        if self.events_time.size == 0:
+            self.events_time = np.zeros(1)
+        
+        self.events_time = np.unique(self.events_time)
+        # Check if t = 0.0 s is included in array events_time.
+        if self.events_time.size > 1 and np.isclose(self.events_time[0],0.0):
+            # Remove t = 0.0 s from event_time since at this time only the 
+            # initialization is performed.
+            self.events_time = self.events_time[1:]
+        self.i_event = 0
+        self.i_event_max = len(self.events_time) - 1
+
+        ## Note on this method ##
+        # An alternative approach could be to 
+        #   1. collect all the event from main and auxiliary input files;
+        #   2. remove duplicates and sort them;
+        #   3. check that difference v[1:] - v[:-1] < 10 * dt
+        # Thsi approach is in general more restrictive than the one adopted at 
+        # the time being.
+
+    def move_to_next_event(self):
+        """Method that updates inplace the event index moving to the next event in the timeline.
+        The method updates the state of attribute self.i_event.
+        """
+        if self.i_event < self.i_event_max:
+            # Move to the next event index.
+            self.i_event += 1
+
+    def append_time(self,time:float):
+        """Method that appends inplace a new item (time) to the list of times.
+        The method updates the state of the following attributes:
+            * self.cond_time
+            * self.cond_num_step
+            * self.appended_time_flag
+
+        Args:
+            time (float): time to be appended to the list
+        """
+        # Append the time of the event as the next item of list cond_time
+        self.cond_time.append(time)
+        # Update the counter of time steps
+        self.cond_num_step += 1
+        # Keep track of the already appended item in cond_time
+        self.appended_time_flag = True
+
+
+    def __check_event_time_main_input(
+        self,
+        l_event:list,
+        simulation:object,
+        f_path:str,
+        ):
+        """Private method that checks if each difference between the ending and the beginning of the heating defined in input file conductor_operation.xlsx can be discretized with at least 10 time steps. If it is not the case, an error is raised.
+
+        Args:
+            l_event (list): list containig values of TQBEG (in the first half) and of TQEND (in the second half).
+            simulation (simulation): simulation object with all the info of the simulation.
+            f_path (str): path to main input file conductor_operation.xlsx from which event times are taken.
+
+        Raises:
+            ValueError: if any of the difference TQEND - TQBEG in file conductor_operation.xlsx cannot be discretized with at least 10 time steps (if flag IADAPTIME = 0) or minimum time step (if flag IADAPTIME = 1 or IADAPTIME = 2).
+        """
+        
+        dt_switch = {
+            0: simulation.transient_input["TIME_STEP"],
+            1: simulation.transient_input["STPMIN"],
+            2: simulation.transient_input["STPMIN"],
+        }
+
+        dt = dt_switch[simulation.transient_input["IADAPTIME"]]
+        dt_label = DT_LABEL_SWITCH[simulation.transient_input["IADAPTIME"]]
+
+        if l_event:
+            # Convert l_event to a temporary numpy array.
+            tmp_event = np.array(l_event)
+            # Index at which the end time of the event are stored. Use round to 
+            # get an integer.
+            i_tqend = round(len(tmp_event) / 2)
+            # Compute difference tqend - tqbeg for each defined heating form 
+            # main input file conductor_operation.xlsx.
+            diff = tmp_event[i_tqend:] - tmp_event[:i_tqend]
+            # Check that tqend - tqbeg is >= 10*dt. If it is not the case an 
+            # error is raised.
+            if any(diff < 1e1 * dt):
+                # At least one difference tqend - tqbeg is < 10*dt: raise an 
+                # error.
+                raise ValueError(f"Selected {dt_label} is to large for suitably discretize all the defined heating period in file {f_path}.\n Please, reduce the {dt_label} such that each difference TQEND - TQBEG is discretized with at least 10 {dt_label}.")
+
+    def __check_event_time_aux_input(
+        self,
+        l_event:np.ndarray,
+        simulation:object,
+        f_path:str,
+        ):
+        """Private method that checks if each difference between the time collected in variable l_event can be discretized with at least 10 time steps. If it is not the case, an error is raised. Those values come form the auxiliary input files for heating and/or current. The difference is evaluated as l_event[1:] - l_event[:-1].
+
+        Args:
+            l_event (np.ndarray): array containig values of the times used in auxiliary files to carry out interpolations.
+            simulation (simulation): simulation object with all the info of the simulation.
+            f_path (str): path of the auxiliary input file from which event times are taken.
+
+        Raises:
+            ValueError: if any of the difference l_event[1:] - l_event[:-1] in file conductor_operation.xlsx cannot be discretized with at least 10 time steps (if flag IADAPTIME = 0) or minimum time step (if flag IADAPTIME = 1 or IADAPTIME = 2).
+        """
+        
+        dt_switch = {
+            0: simulation.transient_input["TIME_STEP"],
+            1: simulation.transient_input["STPMIN"],
+            2: simulation.transient_input["STPMIN"],
+        }
+
+        dt = dt_switch[simulation.transient_input["IADAPTIME"]]
+        dt_label = DT_LABEL_SWITCH[simulation.transient_input["IADAPTIME"]]
+
+        if l_event.size > 0:
+            # Compute difference between each consecutive time value (event 
+            # time) in array l_event (loaded from auxiliary input file).
+            diff = l_event[1:] - l_event[:-1]
+            # Check that each difference is >= 10*dt. If it is not the case an 
+            # error is raised.
+            if any(diff < 1e1 * dt):
+                # At least one difference l_event[1:] - l_event[:-1] is < 
+                # 10*dt: raise an error.
+                raise ValueError(f"Selected {dt_label} is to large for suitably discretize all the defined time ranges in file {f_path}.\n Please, reduce the {dt_label} such that each time range is discretized with at least 10 {dt_label}.")
+
+    def __collect_event_time_aux_input(
+        self,
+        obj_id:str,
+        simulation:object,
+        file_path:str
+        )->np.ndarray:
+        """Private method that collects the user defined times at which events (like heating and current variation) should occur as prescribed in auxiliary input files. This is useful to keep track of all the defined events. 
+        The method:
+            1. loads the auxiliary input file (with function load_auxiliary_files);
+            2. gets the content of the first row of the file, where the time are stored (adding t = 0.0 and t = t_end);
+            3. checks if the user select suitable value of time step/minimum time step invoking method self.__check_event_time_aux_input
+            4. concatenates the checked array to attribute self.events_time
+            5. returns the updated version of self.events_time
+
+        Args:
+            obj_id (str): identifier of the object, used to open the correct sheet of the auxiliary input file.
+            simulation (simulation): simulation object with all the info of the simulation.
+            file_path (str): path of the auxiliary input file from which event times are taken.
+
+        Returns:
+            np.ndarray: updated version of self.events_time to which array times is appended; in this way all the user defined event times are collected in attribute self.events_time.
+        """
+        
+        heat_df,_ = load_auxiliary_files(file_path,obj_id)
+        # Make sure to account for time t = 0.0 s
+        times = np.array([0])
+        # The first row of the dataframe stores the time points used in 
+        # the interpolation function starting from the second column.
+        times = np.append(times,heat_df.iloc[0,1:].to_numpy(dtype=float))
+        # Make sure to account for t = t_end
+        times = np.append(times, np.array([simulation.transient_input["TEND"]]))
+        # Remove duplicates.
+        times = np.unique(times)
+        self.__check_event_time_aux_input(times,simulation,file_path)
+        return np.append(self.events_time,times)

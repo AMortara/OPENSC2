@@ -2,6 +2,7 @@ from pickle import DICT
 from solid_component import SolidComponent
 import pandas as pd
 import numpy as np
+from typing import Union
 
 
 # Stainless steel properties
@@ -463,3 +464,66 @@ class JacketComponent(SolidComponent):
             )
         elif self.inputs["NUM_MATERIAL_TYPES"] == 1:
             return electrical_resistivity[0]
+    
+    def initialize_store_sd(
+        self,
+        N_nod:int,
+        N_elem:int,
+        prop_save_sd_gauss:Union[list,set,tuple],
+        )->tuple:
+        """Method that initializes datastructures store_sd_node and store_sd_gauss that stores spatial distribution (nodal/Gauss points) at 
+        t_save_left (last time step before t_save), at t_save_right (first 
+        time step after t_save) and at t_save (user defined time at which 
+        save spatial distribution).
+
+        Args:
+            N_nod (int): (initial) number of nodes of the mesh
+            N_elem (int): (initial) number of elements of the mesh
+            prop_save_sd_gauss (Union[list,set,tuple]): collection of the properties of interest that should be saved as spatial distribution in Gauss points at user defined time steps.
+
+        Returns:
+            tuple: collection of the following items:
+                * prop_save_sd_node -> collection of properties to be stored for spatial distribution in nodal points;
+                * store_sd_node -> initialized data structure for spatial distribution in nodal points;
+                * store_sd_gauss -> initialized data structure for spatial distribution in Gauss points.
+        """
+        # Leave the comma "," to get a tuple.
+        prop_save_sd_node = ("temperature",)
+        
+        # Data structure that stores spatial distribution (nodal points) at 
+        # t_save_left (last time step before t_save) and at t_save (user 
+        # defined time at which save spatial distribution). Values at t_save 
+        # are in general computed from linear interpolation of the data at 
+        # t_save_left and at t_save_right.
+        # Since the interpolation is carried out when time = t_save_right, 
+        # there is no need to store info at this time here and then perform the 
+        # interpolation: the interpolation is carried out directily exploiting 
+        # the available data.
+        store_sd_node = {
+            prop: dict(
+                t_save_left = np.zeros(N_nod),
+                t_save = np.zeros(N_nod),
+            ) for prop in prop_save_sd_node
+        }
+
+        # Data structure that stores spatial distribution (Gauss points) at 
+        # t_save_left (last time step before t_save) and at t_save (user 
+        # defined time at which save spatial distribution). Values at t_save 
+        # are in general computed from linear interpolation of the data at 
+        # t_save_left and at t_save_right.
+        # Since the interpolation is carried out when time = t_save_right, 
+        # there is no need to store info at this time here and then perform the 
+        # interpolation: the interpolation is carried out directily exploiting 
+        # the available data.
+        store_sd_gauss = {
+            prop: dict(
+                t_save_left = np.zeros(N_elem),
+                t_save = np.zeros(N_elem),
+            ) for prop in prop_save_sd_gauss
+        }
+
+        return (
+            prop_save_sd_node,
+            store_sd_node,
+            store_sd_gauss,
+        )

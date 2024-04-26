@@ -12,15 +12,22 @@ from pstats import SortKey
 from line_profiler import LineProfiler
 
 from conductor import Conductor
-from conductor_flags import IOP_NOT_DEFINED
+from conductor_flags import (IOP_NOT_DEFINED, SHEET_NAME)
 from environment import Environment
 from utility_functions.auxiliary_functions import (
     check_repeated_headings,
     check_object_number,
+    check_flag_value,
+    check_sheet_names,
     with_read_csv,
     with_read_excel,
 )
-from utility_functions.transient_solution_functions import get_time_step, step
+from utility_functions.transient_solution_functions import (
+    get_time_step,
+    step,
+    force_time_step,
+    time_and_event_synchronization,
+)
 from utility_functions.output import (
     save_simulation_space,
     reorganize_spatial_distribution,
@@ -33,7 +40,8 @@ from utility_functions.plots import (
     create_real_time_plots,
     update_real_time_plots,
 )
-
+from simulation_global_info import MLT_DEFAULT_VALUE
+from utility_functions.utils_global_info import VALID_FLAG_VALUES
 
 class Simulation:
 
@@ -57,9 +65,13 @@ class Simulation:
         for f_name in input_files:
             if "transitory_input" in f_name:
                 self.starter_file = f_name
+        
+        # Path of the starting file (master input file)
+        self.starter_file_path = os.path.join(self.basePath, self.starter_file)
+    
         # Load input file transitory_input.xlsx and convert to a dictionary.
         self.transient_input = pd.read_excel(
-            os.path.join(self.basePath, self.starter_file),
+            self.starter_file_path,
             sheet_name="TRANSIENT",
             skiprows=1,
             header=0,
@@ -67,6 +79,16 @@ class Simulation:
             usecols=["Variable name", "Value"],
         )["Value"].to_dict()
         self.flag_start = False
+
+        # Check if user specified a valid value to flag IADAPTIME.
+        check_flag_value(
+            self.transient_input["IADAPTIME"],
+            VALID_FLAG_VALUES,
+            "IADAPTIME",
+            self.starter_file_path,
+            "TRANSIENT",
+        )
+
         # get the order of maginitude of the minimum time step to make proper 
         # rounds to when saving data and figures of solution spatial 
         # distribution at default or User defined times.
@@ -98,6 +120,22 @@ class Simulation:
             total_speed_of_sound="speed_of_sound",
             total_thermal_conductivity="conductivity",
         )
+
+        # Apply default values to keys MLT_UPPER and MLT_LOWER if user 
+        # specifies value none in input file transitory_input.xlsx (i.e. use 
+        # the default value).
+        self.transient_input.update(
+            {
+                key: val for key,val in MLT_DEFAULT_VALUE.items() 
+                if (
+                    isinstance(self.transient_input[key],str) 
+                    and self.transient_input[key].lower() == "none"
+                )
+            }
+        )
+
+        # Uncertainty associated to the time step
+        self.epsilon = 1e-6
 
     # end method __init__ (cdp, 06/2020)
 
@@ -132,25 +170,50 @@ class Simulation:
         dict_file = dict()
         # Loop to get the correct name of file conductor_grid.xlsx
         for f_name in os.listdir(self.basePath):
+            path_str = os.path.join(self.basePath, f_name)
             if "grid" in f_name:
-                dict_file["GRID"] = os.path.join(self.basePath, f_name)
+                dict_file["GRID"] = path_str
             elif "diagnostic" in f_name:
-                dict_file["Spatial_distribution"] = os.path.join(self.basePath, f_name)
-                dict_file["Time_evolution"] = os.path.join(self.basePath, f_name)
+                dict_file["DIAGNO"] = path_str
             # End if "grid".
         # End for f_name.
         # Load workbook conductor_definition.xlsx.
         conductorsSpec = load_workbook(conductor_defn, data_only=True)
+
+        # Check the names of the sheets in file conductor_definition
+        check_sheet_names(
+            SHEET_NAME["conductor_definition"],
+            conductorsSpec.sheetnames,
+            conductor_defn,
+            )
+
         list_conductor_sheet = [
-            conductorsSpec["CONDUCTOR_files"],
-            conductorsSpec["CONDUCTOR_input"],
-            conductorsSpec["CONDUCTOR_operation"],
+            conductorsSpec[sheet_name] for sheet_name in conductorsSpec.sheetnames if "coupling" not in sheet_name
         ]
 
         # Load the workbook in file conductor_grid.xlsx.
         gridCond = load_workbook(dict_file["GRID"], data_only=True)
         # Load the workbook in file conductor_diagnostic.xlsx.
-        wb_diagno = load_workbook(dict_file["Spatial_distribution"], data_only=True)
+        wb_diagno = load_workbook(dict_file["DIAGNO"], data_only=True)
+
+        keys = ("conductor_definition","conductor_grid","conductor_diagnostic")
+        paths = (conductor_defn,dict_file["GRID"],dict_file["DIAGNO"])
+        wbs = (conductorsSpec,gridCond,wb_diagno)
+        # Loop to check the names of the sheets in file conductor_definition, 
+        # conductor_grid and conductor_diagnostic.
+        for key, wb, pt in zip(keys,wbs,paths):
+            # Check the names of the sheets in file conductor_definition
+            check_sheet_names(
+                SHEET_NAME[key],
+                wb.sheetnames,
+                pt,
+                )
+
+        dict_file.update(
+            {key:dict_file["DIAGNO"] for key in wb_diagno.sheetnames}
+        )
+        # Delete key "DIAGNO"
+        del dict_file["DIAGNO"]
         # Loop to check if user define conductors with the same identifier.
         for sheet in list_conductor_sheet:
             check_repeated_headings(conductor_defn, sheet)
@@ -163,12 +226,15 @@ class Simulation:
         # End for sheet.
         # Check if the number of defined conductors is consitent in file conductor_definition.xlsx and in file conductor_gri.xlsx.
 
+        # Create a list of the sheets to be checked exploiting list 
+        # comprehension.
+        sheets_to_check = [
+            gridCond["GRID"],
+            *[wb_diagno[key] for key in wb_diagno.sheetnames]
+            ]
+
         for cond_sheet in list_conductor_sheet:
-            for sheet in [
-                gridCond["GRID"],
-                wb_diagno["Spatial_distribution"],
-                wb_diagno["Time_evolution"],
-            ]:
+            for sheet in sheets_to_check:
                 check_object_number(
                     self,
                     self.transient_input["MAGNET"],
@@ -325,6 +391,11 @@ class Simulation:
             conductor.compute_radiative_heat_exhange_jk()
             # Compute radiative heat exchanged outer jacket and environment.
             conductor.compute_heat_exchange_jk_env(self.environment)
+
+            # Store values of selected quantities at 0.0 s. These stored 
+            # quantities will be saved in file as spatial distributions by 
+            # calling function save_simulation_space.
+            conductor.store_spatial_distributions_t0("t_save")
             # get the times at which users saves the solution spatial distribution \
             # (cdp, 10/2020)
             # list_values = list(conductor.dict_Space_save.values())
@@ -333,9 +404,9 @@ class Simulation:
                 conductor,
                 self.dict_path[
                     f"Output_Spatial_distribution_{conductor.identifier}_dir"
-                ],
-                abs(self.n_digit_time),
+                ]
             )
+            conductor.i_save += 1
         # end for ii (cdp, 10/2020)
         # while loop to solve transient at each timestep (cdp, 07/2020)
         while (
@@ -346,15 +417,26 @@ class Simulation:
             self.num_step = self.num_step + 1
             time_step = np.zeros(self.numObj)
             for ii, conductor in enumerate(self.list_of_Conductors):
-                # Call function Get_time_step to select new time step (cdp, 08/2020)
-                get_time_step(conductor, self.transient_input, self.num_step)
+                
                 time_step[ii] = conductor.time_step
-                # Increase time (cdp, 08/2020)
-                conductor.cond_time.append(
-                    conductor.cond_time[-1] + conductor.time_step
-                )
-                # update time step (cdp, 08/2020)
-                conductor.cond_num_step = conductor.cond_num_step + 1
+
+                # Check if time step is already appended to list cond_time.
+                if conductor.appended_time_flag:
+                    # Time step is already appended to list cond_time in 
+                    # function time_and_event_synchronization or 
+                    # force_time_step calling method conductor.append_time.
+                    # Set conductor.appended_time_flag = False to append 
+                    # the next time to list cond_time according to the standard 
+                    # procedure.
+                    conductor.appended_time_flag = False
+                else:
+                    # Append time according to the standard procedure.
+                    conductor.cond_time.append(
+                        conductor.cond_time[-1] + conductor.time_step
+                    )
+                    # Update time step.
+                    conductor.cond_num_step = conductor.cond_num_step + 1
+
                 # before calling Conductor method initialization adapt mesh if \
                 # necessary as foreseen by ITYMSH. To do later (cdp, 07/2020)
                 # se ho nuova griglia calcolare coefficenti, temperature, pressioni, \
@@ -410,6 +492,7 @@ class Simulation:
                     self.dict_qsource[conductor.identifier],
                     self.num_step,
                 )
+
                 # Loop on FluidComponent (cdp, 10/2020)
                 for fluid_comp in conductor.inventory["FluidComponent"].collection:
                     # compute density and mass flow rate in nodal points with the
@@ -455,27 +538,108 @@ class Simulation:
                     # Update counter to store the state of the simulation, still to come \
                     # (cdp, 08/2020)
                     count_store = count_store + 1
-                if (
-                    conductor.i_save < len(conductor.Space_save) - 1
-                    and abs(
-                        conductor.cond_time[-1] - conductor.Space_save[conductor.i_save]
-                    )
-                    < conductor.time_step / 2.0
-                ):
-                    # save simulation spatial distribution at user defined time steps \
-                    # (cdp, 08/2020)
-                    save_simulation_space(
-                        conductor,
-                        self.dict_path[
-                            f"Output_Spatial_distribution_{conductor.identifier}_dir"
-                        ],
-                        abs(self.n_digit_time),
-                    )
+                
+                # Boolean flag to identify if time is the neighborhood of the 
+                # user defined save time:
+                # t in [t_save - dt_max, t_save + dt_max]
+                flag_t_save = abs(
+                    conductor.Space_save[conductor.i_save]
+                    - conductor.cond_time[-1]
+                    ) <= conductor.time_step #self.transient_input["STPMAX"]
+                # Boolean flag to identify if time is in the left subinterval 
+                # [t_save - dt_max,t_save] (true) or in the right one 
+                # [t_save, t_save + dt_max] (false).
+                from_left = (
+                    conductor.Space_save[conductor.i_save]
+                    > conductor.cond_time[-1]
+                )
+
+                if (conductor.i_save < conductor.i_save_max and flag_t_save):
+                    
+                    # Check if user defined save time is approached from the 
+                    # left.
+                    if from_left:
+                        
+                        # User defined save time is approached from the left.
+
+                        # Save the time at which simulation spatial 
+                        # distributions are stored. This time is called 
+                        # t_save_left since it approaches the user defined 
+                        # time from the left.
+                        conductor.t_save_left = conductor.cond_time[-1]
+
+                        # Store simulation spatial distributions in keyword 
+                        # t_save_left of datastructure store_sd. These values 
+                        # are used to perform a linear interpolation in order 
+                        # to make an extimation of the spatial distribution 
+                        # values at the user defined time steps.
+                        conductor.store_spatial_distributions()
+
+                    else:
+                        
+                        # User defined save time is approached from the rigth.
+                        
+                        # Save the time at which simulation spatial 
+                        # distributions are stored. This time is called 
+                        # t_save_right since it approaches the user defined 
+                        # time from the rigth.
+                        conductor.t_save_right = conductor.cond_time[-1]
+
+                        # Store interpolated simulation spatial distributions 
+                        # in keyword t_save of datastructure store_sd.
+                        # The interpolation can be carried out directly without 
+                        # storing the values at t_save_right since the values 
+                        # at t_save_right are already available in a different 
+                        # data structure.
+                        conductor.store_interp_spatial_distributions()
+
+                        # Save simulation spatial distribution at user defined 
+                        # time steps (interpolated data)
+
+                        save_simulation_space(
+                            conductor,
+                            self.dict_path[
+                                f"Output_Spatial_distribution_{conductor.identifier}_dir"
+                            ],
+                        )
+                        conductor.i_save += 1
                 # end if isave
                 # Save variables time evolution at given spatial coordinates \
                 # (cdp, 08/2020)
                 save_simulation_time(self, conductor)
                 # call sensor to plot results at any time the user asks (cdp, 07/2020)
+
+                # Call function get_time_step to compute the new time step used 
+                # to compute the next value of the time at which the next 
+                # thermal-hydraulic solution will be evaluated. Moving the call 
+                # to function get_time_step after the call to funciton step 
+                # allows to avoid checking if num_step > 1 for each time step 
+                # and for each conductor. The initial value of the time step 
+                # for each conductor is defined at conductor instance and it is 
+                # equal to the user define time step.
+                conductor.time_step = get_time_step(
+                    conductor,
+                    self.transient_input,
+                    self.starter_file_path,
+                )
+
+                conductor = time_and_event_synchronization(
+                    conductor,
+                    self.epsilon,
+                    self.transient_input["STPMIN"],
+                )
+
+                # Check if I did not synchronize time and event. This can be 
+                # checked quering the state of flag conductr.appended_time_flag 
+                # that is set to True if the synchronization was performed.
+                if conductor.appended_time_flag == False:
+                    # Synchronization not performed, there could be the need to 
+                    # force the time step.
+                    conductor = force_time_step(
+                        conductor,
+                        self.transient_input["STPMIN"],
+                    )
+
             # End for conductor (cdp, 07/2020)
         # end while (cdp, 07/2020)
         print("End simulation called " + self.transient_input["SIMULATION"] + "\n")
@@ -493,7 +657,6 @@ class Simulation:
             save_simulation_space(
                 cond,
                 self.dict_path[f"Output_Spatial_distribution_{cond.identifier}_dir"],
-                abs(self.n_digit_time),
             )
             # Call function Save_properties to save the conductor final 
             # solution.
@@ -532,91 +695,13 @@ class Simulation:
 
     # End method _make_directories.
 
-    def _space_convergence_paths(self, list_folder):
-        """Private method that builds the paths for the space convergence analysis invocking the private method _update_dict_path_and_make_dirs."""
-        # list_folder = ["output", "figures"]
-        str_dir = (
-            "TEND_"
-            + f"{self.transient_input['TEND']}_"
-            + "STPMIN_"
-            + f"{self.transient_input['STPMIN']}"
-        )
-        # Build list_key_val exploiting list comprehension. List of tuples: index [0] is the key of the dictionary, index [1] is the corresponding value that is the path to Output or Figures sub directories.
-        list_key_val = [
-            (
-                f"Space_conv_{folder}_dir",
-                os.path.join(
-                    self.dict_path["Sub_dir"],
-                    "Space_convergence",
-                    str_dir,
-                    folder.capitalize(),
-                ),
-            )
-            for folder in list_folder
-        ]
-        # Update the dictionary self.dict_path with keys and values from the dictionary comprehension.
-        self.dict_path.update(
-            {
-                list_key_val[ii][0]: list_key_val[ii][1]
-                for ii in range(len(list_key_val))
-            }
-        )
-        # Make the directories invoking method _make_directories.
-        self._make_directories(list_key_val, exist_ok=True)
-
-    # End method _space_convergence_paths.
-
-    def _time_convergence_paths(self, list_folder):
-        """Private method that builds the paths for the time convergence analysis invocking the private method _update_dict_path_and_make_dirs. The value of NELEMS is the one of the first defined conductor."""
-        # list_folder = ["output", "figures"]
-        str_dir = (
-            "TEND_"
-            + f"{self.transient_input['TEND']}_"
-            + "NELEMS_"
-            + f"{self.list_of_Conductors[0].grid_input['NELEMS']}"
-        )
-        # Build list_key_val exploiting list comprehension. List of tuples: index [0] is the key of the dictionary, index [1] is the corresponding value that is the path to Output or Figures sub directories.
-        list_key_val = [
-            (
-                f"Time_conv_{folder}_dir",
-                os.path.join(
-                    self.dict_path["Sub_dir"],
-                    "Time_convergence",
-                    str_dir,
-                    folder.capitalize(),
-                ),
-            )
-            for folder in list_folder
-        ]
-        # Update the dictionary self.dict_path with keys and values from the dictionary comprehension.
-        self.dict_path.update(
-            {
-                list_key_val[ii][0]: list_key_val[ii][1]
-                for ii in range(len(list_key_val))
-            }
-        )
-        # Make the directories invoking method _make_directories.
-        self._make_directories(list_key_val, exist_ok=True)
-
-        # Path of the directory to save the comparison of the time convergence \
-        # with the same method, comparison is by NELEMS (cdp, 11/2020) [seems to not be used, I do not remember the aim of this!! 08/07/2020]
-        # self.dict_path["Time_conv_comp_METHOD"] = os.path.join(\
-        # 																		self.dict_path["Main_dir"], "METHOD")
-        # Path of the directory to save the comparison of the time convergence \
-        # with the same NELEMS, comparison is by METHODS (cdp, 11/2020) [seems to not be used, I do not remember the aim of this!! 08/07/2020]
-        # self.dict_path["Time_conv_comp_NELEMS"] = os.path.join(\
-        # 																		self.dict_path["Main_dir"], "NELEMS")
-
-    # End method _time_convergence_paths.
-
-    def _subfolders_paths(self, list_folder, list_f_names, dict_make, dict_benchmark):
+    def _subfolders_paths(self, list_folder, list_f_names, dict_make):
         """[summary]
 
         Args:
             list_folder ([type]): [description]
             list_f_names ([type]): [description]
             dict_make ([type]): [description]
-            dict_benchmark ([type]): [description]
         """
         # Loop to create sub folders initialization, Spatial_distribution, Time_evolution and Benchmark in Output and Figures directories; each folder in f_names_list, will contain folder conductor.identifier.
         for f_name in list_f_names:
@@ -646,8 +731,6 @@ class Simulation:
                 dict_make[os.path.exists(self.dict_path[list_key_val[0][0]])](
                     list_key_val
                 )
-                # Create benchmark directory if f_name is "Spatial_distribution" or "Time_evolution"
-                dict_benchmark[f_name](conductor, list_folder, f_name)
             # End for conductor.
         # End for f_name.
 
@@ -666,44 +749,6 @@ class Simulation:
 
     # End method _make_warnings.
 
-    def _benchmark_paths(self, conductor, list_folder, f_name):
-        """[summary]
-
-        Args:
-            conductor ([type]): [description]
-            list_folder ([type]): [description]
-            f_name ([type]): [description]
-        """
-        # Build list_key_val exploiting list comprehension. List of tuples: index [0] is the key of the dictionary, index [1] is the corresponding value that is the path to Output or Figures sub directories.
-        list_key_val = [
-            (
-                f"{folder.capitalize()}_{f_name}_benchmark_{conductor.identifier}_dir",
-                os.path.join(
-                    self.dict_path["Sub_dir"],
-                    self.transient_input["SIMULATION"],
-                    folder.capitalize(),
-                    f_name,
-                    "Benchmark",
-                    conductor.identifier,
-                ),
-            )
-            for folder in list_folder
-        ]
-        # Update the dictionary self.dict_path with keys and values from dictionary comprehension.
-        self.dict_path.update(
-            {
-                list_key_val[ii][0]: list_key_val[ii][1]
-                for ii in range(len(list_key_val))
-            }
-        )
-        # Make the directories invoking method _make_directories.
-        self._make_directories(list_key_val, exist_ok=True)
-        # End method _benchmark_paths.
-
-    def _do_nothing(self, conductor, list_folder, f_name):
-        # Do nothing method, indroduced to use the dictionary dict_benchmark when creating folders.
-        pass
-
     def simulation_folders_manager(self):
         """[summary]"""
         # Define the dummy dictionary with the integration methods (da sistemare, non utilizzare i numeri come keys)
@@ -714,10 +759,6 @@ class Simulation:
             dict_int_method[self.list_of_Conductors[0].inputs["METHOD"]],
         )
         list_folder = ["output", "figures"]
-        # Create paths and folders with method _space_convergence_paths
-        self._space_convergence_paths(list_folder)
-        # Create paths and folders with method _time_convergence_paths
-        self._time_convergence_paths(list_folder)
         # Print a warning if os.path.exists() returns True, build the directories if returns False.
         dict_make = {True: self._make_warnings, False: self._make_directories}
         list_f_names = [
@@ -726,14 +767,8 @@ class Simulation:
             "Time_evolution",
             "Solution",
         ]
-        dict_benchmark = dict(
-            Initialization=self._do_nothing,
-            Spatial_distribution=self._benchmark_paths,
-            Time_evolution=self._benchmark_paths,
-            Solution=self._do_nothing,
-        )
         # Create subfolders path invocking method _subfolders_paths
-        self._subfolders_paths(list_folder, list_f_names, dict_make, dict_benchmark)
+        self._subfolders_paths(list_folder, list_f_names, dict_make)
 
         # Path to save the input files of the simulation in read olny mode as
         # metadata for the simulation itself.
@@ -753,14 +788,13 @@ class Simulation:
         filenames = list()
 
         # Load and save paths for transitory_input file.
-        load_transient_input = os.path.join(self.basePath, self.starter_file)
-        load_paths.append(os.path.join(self.basePath, self.starter_file))
+        load_paths.append(self.starter_file_path)
         filenames.append(self.starter_file)
 
         # Load file transitory_input.
         transient_input = pd.read_excel(
-            load_transient_input,
-            sheet_name="TRANSIENT",
+            self.starter_file_path,
+            sheet_name=SHEET_NAME["transitory_input"].transient,
             skiprows=1,
             header=0,
             index_col=0,

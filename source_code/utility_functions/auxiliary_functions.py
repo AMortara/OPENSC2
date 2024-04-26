@@ -9,7 +9,6 @@ from typing import Union
 import warnings
 
 
-
 def check_repeated_headings(input_file, sheet):
     """[summary]
 
@@ -795,3 +794,86 @@ def natural_sort(comp_a, comp_b):
             return f"{comp_b.identifier}_{comp_a.identifier}"
         # end if
     # end if
+
+def check_flag_value(
+    flag_value:Union[int,str,bool,None],
+    flag_valid_values:dict,
+    flag_name:str,
+    file_path:str,
+    sheet_name:str,
+    ):
+    """Function that checks if a valid value is given to a flag, checking against the corresponding valid values.
+
+    Args:
+        flag_value (Union[int,str,bool,None]): user defined value to the flag.
+        flag_valid_values (dict): data structure with all the valid values for flags.
+        flag_name (str): valid name of the flag
+        file_path (str): path to the input file where the flag is defined
+        sheet_name (str): name of the sheet where the flag is defined
+
+    Raises:
+        ValueError: if the value assigned to the flag by the user is not a valid one.
+    """
+
+    if flag_value not in flag_valid_values[flag_name]:
+        raise ValueError(f"Value {flag_value} is not allowed for flag {flag_name}. Please check sheet {sheet_name} in file {file_path}.")
+
+def interp_at_t_save(
+    tt:float,
+    t1:float,
+    t2:float,
+    y1:np.ndarray,
+    y2:np.ndarray,
+    )->np.ndarray:
+    """Function that performs a linear interpolation in from t_save_left to t_save_right, in order to evaluate values at t_save exploiting array-smart notation. This function is not robust.
+    This function replaces np.interp1d. Indeed, due to data organization, it is not possible to exploit np.interp1d in array smart notation but a for loop is needed (see exhample below). Since this function si built to address this issue with the data organitazion, it is array smart and it is faster than np.interp1d.
+
+        # Exhample of usage of function np.interp1d.
+        # data is a (NN,3) np.array; first column (idx 0) stores values at t1, second column (idx 1) stores values at t2, third column (idx 2) stores interpolated values at tt
+        xp = np.array([t1,t2])
+        for ii in range(NN):
+            fp = np.array([data[ii,0],data[ii,1]])
+            data[ii,2] = np.interp(tt,xp,fp)
+
+    Args:
+        tt (float): time at which the values should be computed; corresponds to t_save.
+        t1 (float): time before tt; corresponds to t_save_left.
+        t2 (float): time after tt; corresponds to t_save_right.
+        y1 (np.ndarray): values at t1
+        y2 (np.ndarray): values at t2
+
+    Returns:
+        np.ndarray: interpolated values.
+    """
+
+    # Array-smart linear interpolation.
+    return y1 + (tt - t1) / (t2 - t1) * (y2 - y1)
+
+def check_sheet_names(
+    ref_sheet_names:Union[list,tuple,set],
+    sheet_names:Union[list,tuple,set],
+    file_path: str,
+    ):
+    """Function that verify if there are wrong sheet names in the primary input files.
+
+    Args:
+        ref_sheet_names (Union[list,tuple,set]): iterable with the reference sheet names
+        sheet_names (Union[list,tuple,set]): iterable with the actual sheet names in the input file.
+        file_path (str): path of the input file
+
+    Raises:
+        ValueError: if any of the sheet names in the primary input file is not consistent with the reference ones.
+    """
+
+    wrong_sheet_names = list()
+
+    # Loop to check sheet names in the primary input file.
+    for sheet_name in sheet_names:
+        if sheet_name not in ref_sheet_names:
+            wrong_sheet_names.append(sheet_name)
+
+    # Check if list wrong_sheet_names is not empty.
+    if wrong_sheet_names:
+        # Found not consisten sheet names in the primary file: 
+        # raise ValueError.
+        raise ValueError(f"Found not valid sheets name in input file {file_path}.\nList of not valid sheet names:{wrong_sheet_names}\nlist of valid sheet names:\n{ref_sheet_names}")
