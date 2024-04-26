@@ -337,6 +337,10 @@ class SolidComponent:
             # Initialize array op_current to 0 in dictionary dict_Gauss_pt to
             # avoid error.
             self.dict_Gauss_pt["op_current"] = np.zeros(conductor.grid_input["NELEMS"])
+            # initialize current along to 0 at t=0 to avoid KeyError in 
+            # method eval_tcs.
+            self.dict_node_pt["current_along"] = self.dict_node_pt["op_current"]
+            self.dict_Gauss_pt["current_along"] = self.dict_Gauss_pt["op_current"]
             # This is exploited in the electric resistance evaluation.
             if (
                 self.name == conductor.inventory["StackComponent"].name
