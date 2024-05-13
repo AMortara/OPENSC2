@@ -657,33 +657,6 @@ class StackComponent(StrandComponent):
                 disp=False,
             )
 
-        # Tolerance on newton halley increased in case I_critical is very small,
-<<<<<<< HEAD
-        # to avoid inaccuracies on the divider that could lead to potential 
-        # differences between sc and stab
-        if min(critical_current)>1e-6:
-            # Default tollerance in optimize.newton method
-            tollerance = 1.48e-8
-        else:
-            # Value found trial and error iteration
-            # tollerance = 1e-12
-            # Other possible solution for the correct tollerance
-            tollerance = min(critical_current)/1000
-        
-=======
-        # to avoid inaccuracies on the divider that could lead to voltage 
-        # differences between sc and stab that are not expected in the parallel
-        # of electric resistances
-        if min(critical_current)>1e-6:
-            # Default tolerance in optimize.newton method
-            tolerance = 1.48e-8
-        else:
-            # Value found trial and error iteration
-            # tollerance = 1e-12
-            # Other possible solution for the correct tolerance
-            tolerance = min(critical_current)/1e3
-
->>>>>>> 7793a75401c4a0aca32861550739394fa397c6d8
         # Evaluate superconducting with Halley's method
         sc_current = optimize.newton(
             self.__sc_current_residual,
@@ -691,11 +664,6 @@ class StackComponent(StrandComponent):
             args=(psi, current),
             fprime=self.__d_sc_current_residual,
             fprime2=self.__d2_sc_current_residual,
-<<<<<<< HEAD
-            tol = tollerance,
-=======
-            tol = tolerance,
->>>>>>> 7793a75401c4a0aca32861550739394fa397c6d8
             maxiter=1000,
         )
 
@@ -823,12 +791,15 @@ class StackComponent(StrandComponent):
                 self.dict_Gauss_pt["temperature"], None
             )
 
-        # Get index for which abs(critical_current_gauss) == 0 (inside normal 
+        # Get index for which abs(critical_current_gauss) < 1e-6 (inside normal 
         # zone by definition).
-        ind_zero = np.nonzero(abs(critical_current_gauss) == 0)[0]
+        # This cutoff value on the critical current was chosen arbitrarily small
+        # in order to avoid the too-small values that could lead later in the 
+        # calculation to different voltage values on sc and stab.
+        ind_zero = np.nonzero(abs(critical_current_gauss) < 1e-6)[0]
         # Get index for which abs(critical_current_gauss) > 0 (outside normal 
         # zone by definition).
-        ind_not_zero = np.nonzero(abs(critical_current_gauss) > 0)[0]
+        ind_not_zero = np.nonzero(abs(critical_current_gauss) >= 1e-6)[0]
 
         # Check if np array ind_zero is not empty: NORMAL REGION BY DEFINITION
         if ind_zero.any():
